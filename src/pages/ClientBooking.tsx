@@ -29,14 +29,12 @@ export function ClientBooking() {
       return;
     }
 
-    if (isSupabaseConfigured) {
-      // Implementar fetch do Supabase se necessário (para perfis e agenda)
-    } else {
-      // Usar Mock
-      const user = MOCK_PROFILES.find(p => p.id === currentUserId);
-      if (user) setCurrentUser(user);
-      setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
-    }
+    // Mesmo com Supabase ativado, carregaremos os perfis estaticos do Mock 
+    // enquanto não implementamos autenticação e CRUD de barbeiros.
+    const user = MOCK_PROFILES.find(p => p.id === currentUserId);
+    if (user) setCurrentUser(user);
+    setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
+    
   }, [currentUserId, navigate]);
 
   useEffect(() => {

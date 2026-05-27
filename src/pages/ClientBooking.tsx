@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, setHours, setMinutes, parseISO, isSameDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarDays, Scissors, CheckCircle, ChevronLeft, LogOut } from 'lucide-react';
+import { Scissors, CheckCircle, ChevronLeft, LogOut } from 'lucide-react';
 import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../lib/supabase';
 import type { Agendamento, Profile } from '../lib/supabase';
 import { cn } from '../lib/utils';

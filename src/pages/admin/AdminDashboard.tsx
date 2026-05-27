@@ -82,9 +82,11 @@ export function AdminDashboard() {
   const handleSaveAgendamento = async (clienteNome: string, servico: 'Corte' | 'Barba' | 'Combo') => {
     if (!selectedTimeSlot) return;
     
-    const newAgendamento = {
+    const newAgendamento: Agendamento = {
+      id: Math.random().toString(36).substr(2, 9),
+      cliente_id: 'cliente_mock',
       cliente_nome: clienteNome,
-      servico,
+      servico: servico,
       data_hora: selectedTimeSlot.toISOString(),
       barbeiro_id: selectedBarbeiroId
     };

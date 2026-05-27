@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Scissors, Calendar, MapPin, Phone } from 'lucide-react';
+import { Scissors, MapPin, Phone } from 'lucide-react';
 import { PwaInstallButton } from '../components/PwaInstallButton';
 
 export function Home() {

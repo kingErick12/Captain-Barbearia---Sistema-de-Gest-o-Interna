@@ -113,7 +113,7 @@ export function FinancialDashboard({ agendamentos, currentUser }: FinancialDashb
                 cursor={{ fill: 'rgba(197, 160, 89, 0.1)' }}
                 contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff', borderRadius: '12px' }}
                 itemStyle={{ color: '#C5A059' }}
-                formatter={(value: any, name: string) => {
+                formatter={(value: any, name: any) => {
                   if (name === 'lucroLoja') return [`R$ ${Number(value || 0).toFixed(2)}`, 'Lucro da Loja (60%)'];
                   if (name === 'comissao') return [`R$ ${Number(value || 0).toFixed(2)}`, 'Comissão do Barbeiro (40%)'];
                   return [`R$ ${Number(value || 0).toFixed(2)}`, name];

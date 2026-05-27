@@ -79,8 +79,9 @@ export function ClientBooking() {
       const { error } = await supabase.from('agendamentos').insert([newAgendamento]);
       if (error) console.error("Erro ao agendar:", error);
     } else {
-      // MOCK save logica - em um cenário real, mandariamos msg whatsapp aqui (via backend/edge func)
-      console.log("Mock Agendamento salvo:", newAgendamento);
+      const current = JSON.parse(localStorage.getItem('captain_mock_agendamentos') || '[]');
+      current.push({ ...newAgendamento, id: Math.random().toString(36).substring(7) });
+      localStorage.setItem('captain_mock_agendamentos', JSON.stringify(current));
     }
     
     setStep(4);

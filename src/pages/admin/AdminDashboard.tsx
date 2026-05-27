@@ -39,7 +39,11 @@ export function AdminDashboard() {
 
   // Busca e Realtime dos Agendamentos
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      const mocks = JSON.parse(localStorage.getItem('captain_mock_agendamentos') || '[]');
+      setAgendamentos(mocks);
+      return;
+    }
 
     const fetchAgendamentos = async () => {
       const { data, error } = await supabase
@@ -100,7 +104,11 @@ export function AdminDashboard() {
         ...newAgendamento,
         id: Math.random().toString(36).substring(7)
       };
-      setAgendamentos((prev) => [...prev, mockAgendamento]);
+      setAgendamentos((prev) => {
+        const updated = [...prev, mockAgendamento];
+        localStorage.setItem('captain_mock_agendamentos', JSON.stringify(updated));
+        return updated;
+      });
     }
     
     setIsModalOpen(false);

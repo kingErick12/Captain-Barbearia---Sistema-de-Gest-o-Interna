@@ -6,7 +6,8 @@
 CREATE TABLE profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     nome TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('dono', 'barbeiro')),
+    role TEXT NOT NULL CHECK (role IN ('dono', 'barbeiro', 'cliente')),
+    telefone TEXT,
     avatar_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -14,6 +15,7 @@ CREATE TABLE profiles (
 -- Criar tabela de Agendamentos
 CREATE TABLE agendamentos (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    cliente_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     cliente_nome TEXT NOT NULL,
     servico TEXT NOT NULL CHECK (servico IN ('Corte', 'Barba', 'Combo')),
     data_hora TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -31,8 +33,7 @@ CREATE POLICY "Profiles são visíveis para todos os usuários autenticados"
 ON profiles FOR SELECT TO authenticated USING (true);
 
 -- 3. Políticas para Agendamentos
--- Visualização: Barbeiro vê tudo (ou apenas o dele, isso pode ser filtrado no frontend pro dono/barbeiro, 
--- mas por simplicidade no BD vamos deixar autenticados lerem todos e o Frontend filtra).
+-- Visualização
 CREATE POLICY "Agendamentos visíveis para todos usuários" 
 ON agendamentos FOR SELECT TO authenticated USING (true);
 
@@ -40,7 +41,7 @@ ON agendamentos FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Qualquer um logado pode criar agendamentos" 
 ON agendamentos FOR INSERT TO authenticated WITH CHECK (true);
 
--- Atualização/Exclusão: Apenas dono do agendamento ou o "dono" do salão poderia, por enquanto vamos liberar para autenticados.
+-- Atualização/Exclusão
 CREATE POLICY "Autenticados podem editar agendamentos" 
 ON agendamentos FOR UPDATE TO authenticated USING (true);
 

@@ -18,6 +18,9 @@
   .text-shadow {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 @layer base {
@@ -57,8 +60,4 @@
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-bronze-dark;
   }
-}
-
-@utility pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
 }

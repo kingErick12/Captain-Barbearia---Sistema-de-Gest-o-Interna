@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { format, setHours, setMinutes, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LogOut, CalendarDays, Users, TrendingUp } from 'lucide-react';
-import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../lib/supabase';
-import type { Agendamento } from '../lib/supabase';
-import { BookingModal } from '../components/BookingModal';
-import { FinancialDashboard } from '../components/FinancialDashboard';
-import { PwaInstallButton } from '../components/PwaInstallButton';
-import { cn } from '../lib/utils';
+import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../../lib/supabase';
+import type { Agendamento } from '../../lib/supabase';
+import { BookingModal } from '../../components/BookingModal';
+import { FinancialDashboard } from '../../components/FinancialDashboard';
+import { TeamManagement } from '../../components/TeamManagement';
+import { PwaInstallButton } from '../../components/PwaInstallButton';
+import { cn } from '../../lib/utils';
 
-export function Dashboard() {
+export function AdminDashboard() {
   const navigate = useNavigate();
   
   // Auth state
@@ -19,7 +20,7 @@ export function Dashboard() {
   
   const [selectedBarbeiroId, setSelectedBarbeiroId] = useState<string>(currentUserId || '');
   const [currentDate] = useState<Date>(new Date());
-  const [activeTab, setActiveTab] = useState<'agenda' | 'stats'>('agenda');
+  const [activeTab, setActiveTab] = useState<'agenda' | 'stats' | 'equipe'>('agenda');
   
   // Data state
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
@@ -28,12 +29,13 @@ export function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<Date | null>(null);
 
-  // Redireciona se não estiver logado
+  // Redireciona se não estiver logado ou se o usuário não existir mais
   useEffect(() => {
-    if (!currentUserId) {
-      navigate('/');
+    if (!currentUserId || !currentUser) {
+      localStorage.removeItem('captain_user_id');
+      navigate('/login');
     }
-  }, [currentUserId, navigate]);
+  }, [currentUserId, currentUser, navigate]);
 
   // Busca e Realtime dos Agendamentos
   useEffect(() => {
@@ -102,14 +104,17 @@ export function Dashboard() {
     setIsModalOpen(false);
   };
 
-  // Gerar slots de horários das 08:00 às 19:00 com intervalos de 30 min
+  // Gerar slots de horários das 08:00 às 19:00 com intervalos de 40 min
   const timeSlots = useMemo(() => {
     const slots = [];
-    for (let i = 8; i <= 19; i++) {
-      slots.push(setMinutes(setHours(currentDate, i), 0));
-      if (i !== 19) {
-        slots.push(setMinutes(setHours(currentDate, i), 30));
-      }
+    let currentMinutes = 8 * 60; // 08:00
+    const endMinutes = 19 * 60; // 19:00
+    
+    while (currentMinutes <= endMinutes) {
+      const hours = Math.floor(currentMinutes / 60);
+      const mins = currentMinutes % 60;
+      slots.push(setMinutes(setHours(currentDate, hours), mins));
+      currentMinutes += 40; // Intervalo de 40 min
     }
     return slots;
   }, [currentDate]);
@@ -143,6 +148,8 @@ export function Dashboard() {
           <div className="animate-in fade-in slide-in-from-right-8 duration-500">
             <FinancialDashboard currentUser={currentUser} agendamentos={agendamentos} />
           </div>
+        ) : activeTab === 'equipe' && currentUser.role === 'dono' ? (
+          <TeamManagement />
         ) : (
           <div className="animate-in fade-in slide-in-from-left-8 duration-500 space-y-6">
             {/* Filtro de Barbeiro (Apenas para o Dono) */}
@@ -153,7 +160,7 @@ export function Dashboard() {
                   Visualizar Agenda de:
                 </h3>
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                  {MOCK_PROFILES.map(profile => (
+                  {MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono').map(profile => (
                     <button
                       key={profile.id}
                       onClick={() => setSelectedBarbeiroId(profile.id)}
@@ -265,6 +272,21 @@ export function Dashboard() {
           <TrendingUp className="w-6 h-6 mb-0.5" />
           <span className="text-[10px] font-bold uppercase tracking-wider">Dashboard</span>
         </button>
+        
+        {currentUser.role === 'dono' && (
+          <button
+            onClick={() => setActiveTab('equipe')}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 px-3 rounded-2xl transition-all duration-300",
+              activeTab === 'equipe' 
+                ? "text-bronze-main bg-bronze-main/10" 
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            )}
+          >
+            <Users className="w-6 h-6 mb-0.5" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Equipe</span>
+          </button>
+        )}
       </nav>
 
       <BookingModal 

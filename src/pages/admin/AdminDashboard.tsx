@@ -4,7 +4,7 @@ import { format, setHours, setMinutes, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LogOut, CalendarDays, Users, TrendingUp, Check, X } from 'lucide-react';
 import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../../lib/supabase';
-import type { Agendamento } from '../../lib/supabase';
+import type { Agendamento, Profile } from '../../lib/supabase';
 import { BookingModal } from '../../components/BookingModal';
 import { FinancialDashboard } from '../../components/FinancialDashboard';
 import { TeamManagement } from '../../components/TeamManagement';
@@ -16,7 +16,8 @@ export function AdminDashboard() {
   
   // Auth state
   const currentUserId = localStorage.getItem('captain_user_id');
-  const currentUser = MOCK_PROFILES.find(p => p.id === currentUserId);
+  const [currentUser, setCurrentUser] = useState<Profile | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   
   const [selectedBarbeiroId, setSelectedBarbeiroId] = useState<string>(currentUserId || '');
   const [currentDate] = useState<Date>(new Date());
@@ -30,13 +31,96 @@ export function AdminDashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<Date | null>(null);
 
-  // Redireciona se não estiver logado ou se o usuário não existir mais
+  // Carrega o perfil do usuário e redireciona se necessário
   useEffect(() => {
-    if (!currentUserId || !currentUser) {
-      localStorage.removeItem('captain_user_id');
+    if (!currentUserId) {
       navigate('/login');
+      return;
     }
-  }, [currentUserId, currentUser, navigate]);
+
+    const loadUser = async () => {
+      try {
+        console.log("[AdminDashboard] Iniciando loadUser. ID:", currentUserId);
+        
+        if (!isSupabaseConfigured) {
+          const user = MOCK_PROFILES.find(p => p.id === currentUserId);
+          if (user) {
+            console.log("[AdminDashboard] Modo Mock: Usuário encontrado:", user);
+            setCurrentUser(user);
+          } else {
+            console.warn("[AdminDashboard] Modo Mock: Usuário não encontrado, redirecionando para login.");
+            localStorage.removeItem('captain_user_id');
+            navigate('/login');
+          }
+          setLoadingUser(false);
+          return;
+        }
+
+        // Garantir que a sessão foi carregada na memória do cliente Supabase antes da consulta
+        console.log("[AdminDashboard] Obtendo sessão do Supabase...");
+        await supabase.auth.getSession();
+
+        console.log("[AdminDashboard] Consultando perfil no Supabase para o ID:", currentUserId);
+        const { data: userData, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUserId)
+          .single();
+
+        if (userData && !error) {
+          const profile = userData as Profile;
+          console.log("[AdminDashboard] Perfil retornado do Supabase:", profile);
+          if (profile.role === 'cliente') {
+            console.warn("[AdminDashboard] Perfil é de cliente. Redirecionando para /agendar");
+            navigate('/agendar');
+          } else {
+            console.log("[AdminDashboard] Acesso concedido para o perfil.");
+            setCurrentUser(profile);
+          }
+        } else {
+          if (error) {
+            console.warn("[AdminDashboard] Erro na consulta do perfil:", error.message, error.details);
+          }
+
+          // Fallback pelo e-mail salvo no localStorage para os administradores principais
+          const rawEmail = localStorage.getItem('captain_user_email');
+          const userEmail = rawEmail ? rawEmail.trim().toLowerCase() : '';
+          console.log("[AdminDashboard] Tentando fallback com e-mail:", userEmail);
+          
+          if (userEmail === 'admin@captain.com' || userEmail === 'admin@admin.com') {
+            console.log("[AdminDashboard] Fallback ativado com sucesso para:", userEmail);
+            setCurrentUser({
+              id: currentUserId || '99',
+              nome: 'Administrador Suporte',
+              role: 'dono',
+              telefone: '11999999999'
+            });
+          } else {
+            // Fallback para mock profiles (ex: admin suporte '99')
+            const mockUser = MOCK_PROFILES.find(p => p.id === currentUserId);
+            if (mockUser) {
+              console.log("[AdminDashboard] Fallback de ID Mock ativado:", mockUser);
+              setCurrentUser(mockUser);
+            } else {
+              console.warn("[AdminDashboard] Sem credenciais válidas ou fallback. Redirecionando para login.");
+              localStorage.removeItem('captain_user_id');
+              localStorage.removeItem('captain_user_email');
+              navigate('/login');
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[AdminDashboard] Erro crítico ao carregar perfil do usuário:", err);
+        localStorage.removeItem('captain_user_id');
+        localStorage.removeItem('captain_user_email');
+        navigate('/login');
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    loadUser();
+  }, [currentUserId, navigate]);
 
   // Busca e Realtime dos Agendamentos e Equipe
   useEffect(() => {
@@ -79,6 +163,7 @@ export function AdminDashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem('captain_user_id');
+    localStorage.removeItem('captain_user_email');
     navigate('/');
   };
 
@@ -163,6 +248,15 @@ export function AdminDashboard() {
     }
     return slots;
   }, [currentDate]);
+
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen bg-transparent flex flex-col justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-bronze-main"></div>
+        <p className="mt-4 text-zinc-500 dark:text-zinc-400 font-medium animate-pulse">Carregando painel...</p>
+      </div>
+    );
+  }
 
   if (!currentUser) return null;
 

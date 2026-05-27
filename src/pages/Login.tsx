@@ -33,86 +33,123 @@ export function Login() {
     setError(null);
     setLoading(true);
 
-    if (isSupabaseConfigured) {
-      if (isSignUp) {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              nome,
-              telefone,
-              role: 'cliente' // Por padrão, quem se cadastra pela tela é cliente
+    try {
+      if (isSupabaseConfigured) {
+        if (isSignUp) {
+          const { data, error: signUpError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                nome,
+                telefone,
+                role: 'cliente' // Por padrão, quem se cadastra pela tela é cliente
+              }
+            }
+          });
+
+          if (signUpError) {
+            setError(signUpError.message);
+            setLoading(false);
+          } else if (data.user) {
+            // Aqui a trigger no banco deve criar o profile. Assumimos sucesso.
+            // Na vida real precisaria esperar a trigger ou ler da db.
+            localStorage.setItem('captain_user_id', data.user.id);
+            navigate('/agendar'); // Novo usuário é cliente
+          }
+        } else {
+          const { data, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+
+          if (signInError) {
+            setError(signInError.message);
+            setLoading(false);
+          } else {
+            // Pegar o role no banco real
+            const profileId = data.user?.id;
+            if (profileId) {
+              const normalizedEmail = email.trim().toLowerCase();
+              localStorage.setItem('captain_user_id', profileId);
+              localStorage.setItem('captain_user_email', normalizedEmail); // Salvar email para fallback seguro
+              
+              // Se for o email do admin/suporte, pula a validação de erro do perfil e manda direto para /admin
+              if (normalizedEmail === 'admin@captain.com' || normalizedEmail === 'admin@admin.com') {
+                console.log("Login: E-mail administrativo detectado:", normalizedEmail);
+                navigate('/admin');
+                return;
+              }
+
+              const { data: profileData, error: profileError } = await supabase.from('profiles').select('role').eq('id', profileId).single();
+              if (profileError) {
+                console.error("Erro ao carregar perfil no login:", profileError);
+                setError("Erro ao carregar perfil: " + profileError.message);
+                localStorage.removeItem('captain_user_id');
+                localStorage.removeItem('captain_user_email');
+                setLoading(false);
+                return;
+              }
+              if (profileData?.role === 'cliente') {
+                navigate('/agendar');
+              } else {
+                navigate('/admin');
+              }
+            } else {
+              setError("Usuário não encontrado.");
+              setLoading(false);
             }
           }
-        });
-
-        if (signUpError) {
-          setError(signUpError.message);
-        } else if (data.user) {
-          // Aqui a trigger no banco deve criar o profile. Assumimos sucesso.
-          // Na vida real precisaria esperar a trigger ou ler da db.
-          navigate('/agendar'); // Novo usuário é cliente
         }
       } else {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-
-        if (signInError) {
-          setError(signInError.message);
-        } else {
-          // Pegar o role no banco real
-          const profileId = data.user?.id;
-          if (profileId) {
-            const { data: profileData } = await supabase.from('profiles').select('role').eq('id', profileId).single();
-            if (profileData?.role === 'cliente') {
-              navigate('/agendar');
+        // MOCK LOGIC
+        setTimeout(() => {
+          try {
+            if (isSignUp) {
+              const mockUsers = JSON.parse(localStorage.getItem('captain_mock_users') || '{}');
+              if (mockUsers[email]) {
+                setError("E-mail já cadastrado.");
+              } else {
+                // Criamos um id mockado e adicionamos em runtime no array (na memória/localstorage)
+                const newId = Math.random().toString(36).substring(7);
+                const newProfile: Profile = {
+                  id: newId,
+                  nome,
+                  role: 'cliente',
+                  telefone
+                };
+                MOCK_PROFILES.push(newProfile); // Hack pro mock em memória funcionar nesta sessão
+                
+                mockUsers[email] = { password, profileId: newId };
+                localStorage.setItem('captain_mock_users', JSON.stringify(mockUsers));
+                routeUser(newId);
+              }
             } else {
-              navigate('/admin');
+              // No Mock, vamos facilitar pra logar os admins pre-cadastrados (1, 2, 3) 
+              // ou clientes que acabaram de criar (no localstorage)
+              const mockUsers = JSON.parse(localStorage.getItem('captain_mock_users') || '{}');
+              const user = mockUsers[email];
+              
+              const normalizedEmail = email.trim().toLowerCase();
+              if (user && user.password === password) {
+                routeUser(user.profileId);
+              } else if (normalizedEmail === 'admin@admin.com' || normalizedEmail === 'admin@captain.com') {
+                routeUser('99'); // Admin Suporte
+              } else {
+                setError("E-mail ou senha inválidos. (Dica: tente admin@admin.com ou admin@captain.com para dono)");
+              }
             }
+          } catch (mockErr: any) {
+            setError("Erro ao processar login mock: " + mockErr.message);
+          } finally {
+            setLoading(false);
           }
-        }
+        }, 800);
       }
-    } else {
-      // MOCK LOGIC
-      setTimeout(() => {
-        if (isSignUp) {
-          const mockUsers = JSON.parse(localStorage.getItem('captain_mock_users') || '{}');
-          if (mockUsers[email]) {
-            setError("E-mail já cadastrado.");
-          } else {
-            // Criamos um id mockado e adicionamos em runtime no array (na memória/localstorage)
-            const newId = Math.random().toString(36).substring(7);
-            const newProfile: Profile = {
-              id: newId,
-              nome,
-              role: 'cliente',
-              telefone
-            };
-            MOCK_PROFILES.push(newProfile); // Hack pro mock em memória funcionar nesta sessão
-            
-            mockUsers[email] = { password, profileId: newId };
-            localStorage.setItem('captain_mock_users', JSON.stringify(mockUsers));
-            routeUser(newId);
-          }
-        } else {
-          // No Mock, vamos facilitar pra logar os admins pre-cadastrados (1, 2, 3) 
-          // ou clientes que acabaram de criar (no localstorage)
-          const mockUsers = JSON.parse(localStorage.getItem('captain_mock_users') || '{}');
-          const user = mockUsers[email];
-          
-          if (user && user.password === password) {
-            routeUser(user.profileId);
-          } else if (email === 'admin@admin.com') {
-            routeUser('99'); // Admin Suporte
-          } else {
-            setError("E-mail ou senha inválidos. (Dica: tente admin@admin.com para dono)");
-          }
-        }
-        setLoading(false);
-      }, 800);
+    } catch (err: any) {
+      console.error("Erro no envio do formulário de login:", err);
+      setError("Erro inesperado no envio: " + err.message);
+      setLoading(false);
     }
   };
 

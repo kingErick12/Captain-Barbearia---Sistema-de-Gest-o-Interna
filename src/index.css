@@ -14,13 +14,12 @@
   --font-sans: "Inter", "Outfit", system-ui, sans-serif;
 }
 
-@layer utilities {
-  .text-shadow {
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  }
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+@utility text-shadow {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 @layer base {

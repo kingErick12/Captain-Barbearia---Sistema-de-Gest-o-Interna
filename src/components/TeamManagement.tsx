@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { UserPlus, Mail, Phone, Lock, User, Shield, Trash2 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../lib/supabase';
 import type { Profile } from '../lib/supabase';

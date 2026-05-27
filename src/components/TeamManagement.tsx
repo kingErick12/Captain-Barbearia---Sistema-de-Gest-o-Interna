@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserPlus, Mail, Phone, Lock, User, Shield } from 'lucide-react';
+import { UserPlus, Mail, Phone, Lock, User, Shield, Trash2 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../lib/supabase';
 import type { Profile } from '../lib/supabase';
 
@@ -11,8 +11,22 @@ export function TeamManagement() {
   const [role, setRole] = useState<'barbeiro' | 'dono'>('barbeiro');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [barbeiros, setBarbeiros] = useState<Profile[]>([]);
 
-  const barbeiros = MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono');
+  // Buscar equipe atual do banco
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
+      return;
+    }
+
+    const fetchEquipe = async () => {
+      const { data } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
+      if (data) setBarbeiros(data as Profile[]);
+    };
+
+    fetchEquipe();
+  }, []);
 
   const handleAddBarbeiro = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,20 +34,24 @@ export function TeamManagement() {
     setMessage(null);
 
     if (isSupabaseConfigured) {
-      // Exemplo de criação no supabase (geralmente precisa de uma edge function 
-      // ou admin key para criar usuários sem deslogar o dono)
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { nome, telefone, role }
-        }
-      });
+      const newId = Math.random().toString(36).substring(7);
+      
+      const { error } = await supabase.from('profiles').insert([{
+        id: newId,
+        nome,
+        role,
+        telefone,
+        email,       // Funciona apenas se você rodar o script para adicionar essas colunas!
+        senha: password // Salvar senha em texto puro apenas para fins didaticos/demonstracao.
+      }]);
+
       if (error) {
         setMessage({ type: 'error', text: error.message });
       } else {
-        setMessage({ type: 'success', text: 'Barbeiro adicionado com sucesso!' });
+        setMessage({ type: 'success', text: 'Membro da equipe adicionado com sucesso!' });
         setNome(''); setEmail(''); setTelefone(''); setPassword('');
+        // Atualiza a lista da tela
+        setBarbeiros(prev => [...prev, { id: newId, nome, role, telefone } as Profile]);
       }
     } else {
       // Mock logic
@@ -53,6 +71,21 @@ export function TeamManagement() {
         }
         setLoading(false);
       }, 800);
+    }
+  };
+
+  const handleDeleteBarbeiro = async (id: string) => {
+    if (confirm("Tem certeza que deseja remover este membro da equipe?")) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from('profiles').delete().eq('id', id);
+        if (!error) {
+          setBarbeiros(prev => prev.filter(p => p.id !== id));
+        } else {
+          alert("Erro ao excluir: " + error.message);
+        }
+      } else {
+        setBarbeiros(prev => prev.filter(p => p.id !== id));
+      }
     }
   };
 
@@ -149,6 +182,17 @@ export function TeamManagement() {
                   <p className="text-xs text-zinc-500 uppercase tracking-widest">{b.role}</p>
                 </div>
               </div>
+              
+              {/* Botão de Excluir */}
+              {b.role !== 'dono' && (
+                <button 
+                  onClick={() => handleDeleteBarbeiro(b.id)}
+                  className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                  title="Remover Barbeiro"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
             </div>
           ))}
         </div>

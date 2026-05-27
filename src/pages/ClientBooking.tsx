@@ -29,12 +29,29 @@ export function ClientBooking() {
       return;
     }
 
-    // Mesmo com Supabase ativado, carregaremos os perfis estaticos do Mock 
-    // enquanto não implementamos autenticação e CRUD de barbeiros.
-    const user = MOCK_PROFILES.find(p => p.id === currentUserId);
-    if (user) setCurrentUser(user);
-    setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
-    
+    if (!isSupabaseConfigured) {
+      const user = MOCK_PROFILES.find(p => p.id === currentUserId);
+      if (user) setCurrentUser(user);
+      setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
+      return;
+    }
+
+    const fetchPerfis = async () => {
+      // Pega o current user
+      const { data: userData } = await supabase.from('profiles').select('*').eq('id', currentUserId).single();
+      if (userData) setCurrentUser(userData as Profile);
+      else {
+        // Fallback pro mock se o dono ainda tiver o ID '99' na memoria mas n existir no banco
+        const mockUser = MOCK_PROFILES.find(p => p.id === currentUserId);
+        if (mockUser) setCurrentUser(mockUser);
+      }
+
+      // Pega a equipe (dono e barbeiros) para exibir na seleção
+      const { data: equipeData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
+      if (equipeData) setBarbeiros(equipeData as Profile[]);
+    };
+
+    fetchPerfis();
   }, [currentUserId, navigate]);
 
   useEffect(() => {

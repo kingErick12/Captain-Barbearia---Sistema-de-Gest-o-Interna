@@ -24,6 +24,7 @@ export function AdminDashboard() {
   
   // Data state
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+  const [equipe, setEquipe] = useState<Profile[]>([]);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,24 +38,24 @@ export function AdminDashboard() {
     }
   }, [currentUserId, currentUser, navigate]);
 
-  // Busca e Realtime dos Agendamentos
+  // Busca e Realtime dos Agendamentos e Equipe
   useEffect(() => {
     if (!isSupabaseConfigured) {
       const mocks = JSON.parse(localStorage.getItem('captain_mock_agendamentos') || '[]');
       setAgendamentos(mocks);
+      setEquipe(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
       return;
     }
 
-    const fetchAgendamentos = async () => {
-      const { data, error } = await supabase
-        .from('agendamentos')
-        .select('*');
-      
-      if (data) setAgendamentos(data as Agendamento[]);
-      if (error) console.error("Erro ao buscar:", error);
+    const fetchData = async () => {
+      const { data: agData } = await supabase.from('agendamentos').select('*');
+      if (agData) setAgendamentos(agData as Agendamento[]);
+
+      const { data: eqData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
+      if (eqData) setEquipe(eqData as Profile[]);
     };
 
-    fetchAgendamentos();
+    fetchData();
 
     const channel = supabase
       .channel('schema-db-changes')
@@ -63,7 +64,10 @@ export function AdminDashboard() {
         { event: '*', schema: 'public', table: 'agendamentos' },
         (payload) => {
           console.log("Realtime update:", payload);
-          fetchAgendamentos();
+          // O ideal é buscar apenas o agendamento alterado, mas recarregar tudo é mais simples pro demo
+          supabase.from('agendamentos').select('*').then(({data}) => {
+            if (data) setAgendamentos(data as Agendamento[]);
+          });
         }
       )
       .subscribe();
@@ -201,7 +205,7 @@ export function AdminDashboard() {
                   Visualizar Agenda de:
                 </h3>
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                  {MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono').map(profile => (
+                  {equipe.map(profile => (
                     <button
                       key={profile.id}
                       onClick={() => setSelectedBarbeiroId(profile.id)}

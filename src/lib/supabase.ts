@@ -19,9 +19,11 @@ export type Agendamento = {
   id: string;
   cliente_id: string;
   cliente_nome: string;
+  cliente_telefone?: string;
   servico: 'Corte' | 'Barba' | 'Combo';
   data_hora: string;
   barbeiro_id: string;
+  status?: 'Pendente' | 'Confirmado' | 'Cancelado';
 }
 
 // Para facilitar o MOCK Inicial (sem backend real acoplado)

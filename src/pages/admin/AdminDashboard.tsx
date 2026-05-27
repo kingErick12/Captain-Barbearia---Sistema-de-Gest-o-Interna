@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, setHours, setMinutes, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LogOut, CalendarDays, Users, TrendingUp } from 'lucide-react';
+import { LogOut, CalendarDays, Users, TrendingUp, Check, X } from 'lucide-react';
 import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../../lib/supabase';
 import type { Agendamento } from '../../lib/supabase';
 import { BookingModal } from '../../components/BookingModal';
@@ -114,6 +114,37 @@ export function AdminDashboard() {
     setIsModalOpen(false);
   };
 
+  const handleUpdateStatus = async (agendamento: Agendamento, novoStatus: 'Confirmado' | 'Cancelado') => {
+    // 1. Atualizar
+    if (isSupabaseConfigured) {
+      await supabase.from('agendamentos').update({ status: novoStatus }).eq('id', agendamento.id);
+      // O realtime fará o fetchAgendamentos() recarregar a tela
+    } else {
+      setAgendamentos(prev => {
+        const updated = prev.map(a => a.id === agendamento.id ? { ...a, status: novoStatus } : a);
+        localStorage.setItem('captain_mock_agendamentos', JSON.stringify(updated));
+        return updated;
+      });
+    }
+
+    // 2. WhatsApp
+    if (agendamento.cliente_telefone) {
+      const numeroLimpo = agendamento.cliente_telefone.replace(/\D/g, '');
+      const dataFormatada = format(parseISO(agendamento.data_hora), "dd/MM 'às' HH:mm");
+      let mensagem = '';
+      
+      if (novoStatus === 'Confirmado') {
+        mensagem = `Olá ${agendamento.cliente_nome}! Seu agendamento de ${agendamento.servico} para o dia ${dataFormatada} foi *CONFIRMADO*! Te esperamos na Captain Barbearia. ⚓✂️`;
+      } else {
+        mensagem = `Olá ${agendamento.cliente_nome}. Infelizmente não poderemos te atender no dia ${dataFormatada} e seu agendamento precisou ser *Cancelado*. Pedimos desculpas pelo transtorno. Acesse nosso app para escolher um novo horário! ⚓🙏`;
+      }
+
+      window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
+    } else {
+      alert(`Status atualizado para ${novoStatus}, mas o cliente não tem telefone salvo para o WhatsApp.`);
+    }
+  };
+
   // Gerar slots de horários das 08:00 às 19:00 com intervalos de 40 min
   const timeSlots = useMemo(() => {
     const slots = [];
@@ -206,6 +237,7 @@ export function AdminDashboard() {
                 // Filtra os agendamentos daquele horario especifico para o barbeiro selecionado
                 const agendamento = agendamentos.find((a) => {
                   if (a.barbeiro_id !== selectedBarbeiroId) return false;
+                  if (a.status === 'Cancelado') return false; // Libera o horário na grade se foi cancelado
                   const agendamentoDate = parseISO(a.data_hora);
                   return isSameDay(agendamentoDate, time) && 
                          agendamentoDate.getHours() === time.getHours() && 
@@ -231,7 +263,10 @@ export function AdminDashboard() {
                     {/* Coluna do Conteúdo */}
                     <div className="flex-1 p-3 ml-2">
                       {agendamento ? (
-                        <div className="bg-zinc-50 dark:bg-graphite-main p-3 rounded-xl border border-zinc-100 dark:border-zinc-700/50 shadow-inner">
+                        <div className={cn("p-3 rounded-xl border shadow-inner",
+                          agendamento.status === 'Confirmado' ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/50" :
+                          "bg-zinc-50 dark:bg-graphite-main border-zinc-100 dark:border-zinc-700/50"
+                        )}>
                           <div className="flex justify-between items-start">
                             <p className="font-semibold text-zinc-800 dark:text-white tracking-wide">
                               {agendamento.cliente_nome}
@@ -239,6 +274,34 @@ export function AdminDashboard() {
                             <span className="text-[10px] uppercase tracking-widest bg-bronze-main/10 text-bronze-main px-2 py-1 rounded-md border border-bronze-main/20">
                               {agendamento.servico}
                             </span>
+                          </div>
+                          
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className={cn(
+                              "text-[10px] font-bold uppercase tracking-widest",
+                              agendamento.status === 'Confirmado' ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+                            )}>
+                              {agendamento.status || 'Pendente'}
+                            </span>
+                            
+                            {(!agendamento.status || agendamento.status === 'Pendente') && (
+                              <div className="flex space-x-2">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleUpdateStatus(agendamento, 'Cancelado'); }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 transition-colors"
+                                  title="Recusar"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleUpdateStatus(agendamento, 'Confirmado'); }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 transition-colors"
+                                  title="Aceitar"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : (

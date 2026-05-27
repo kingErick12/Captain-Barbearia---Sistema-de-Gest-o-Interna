@@ -68,9 +68,11 @@ export function ClientBooking() {
     const newAgendamento = {
       cliente_id: currentUser.id,
       cliente_nome: currentUser.nome,
+      cliente_telefone: currentUser.telefone || '',
       servico: selectedServico,
       data_hora: selectedTimeSlot.toISOString(),
-      barbeiro_id: selectedBarbeiro
+      barbeiro_id: selectedBarbeiro,
+      status: 'Pendente'
     };
 
     if (isSupabaseConfigured) {

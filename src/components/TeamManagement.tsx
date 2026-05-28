@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../lib/supabase';
 import type { Profile } from '../lib/supabase';
 
 export function TeamManagement() {
+  const currentUserId = localStorage.getItem('captain_user_id');
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -183,12 +184,12 @@ export function TeamManagement() {
                 </div>
               </div>
               
-              {/* Botão de Excluir */}
-              {b.role !== 'dono' && (
+              {/* Botão de Excluir (visível para qualquer membro que não seja o próprio usuário logado) */}
+              {b.id !== currentUserId && (
                 <button 
                   onClick={() => handleDeleteBarbeiro(b.id)}
                   className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-                  title="Remover Barbeiro"
+                  title="Remover Membro"
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>

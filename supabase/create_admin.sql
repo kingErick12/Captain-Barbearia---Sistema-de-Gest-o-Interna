@@ -54,18 +54,22 @@ BEGIN
         ''
     );
 
-    -- 3. Inserir na tabela pública de profiles (convertendo o UUID gerado para texto)
+    -- 3. Inserir na tabela pública de profiles (com suporte a conflitos se o trigger já tiver inserido)
     INSERT INTO public.profiles (
         id,
         nome,
         role,
         telefone
     ) VALUES (
-        new_user_id::text,
+        new_user_id,
         admin_nome,
         'dono',
         admin_telefone
-    );
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        nome = EXCLUDED.nome,
+        role = EXCLUDED.role,
+        telefone = EXCLUDED.telefone;
 
     RAISE NOTICE 'Usuário administrador recriado com sucesso! E-mail: %, Senha: %', admin_email, admin_password;
 END $$;

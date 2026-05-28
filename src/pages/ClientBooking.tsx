@@ -14,6 +14,7 @@ export function ClientBooking() {
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [barbeiros, setBarbeiros] = useState<Profile[]>([]);
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+  const [loading, setLoading] = useState(true);
   
   // Fluxo de seleção
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // 1: Barbeiro, 2: Serviço, 3: Data/Hora, 4: Sucesso
@@ -31,24 +32,45 @@ export function ClientBooking() {
 
     if (!isSupabaseConfigured) {
       const user = MOCK_PROFILES.find(p => p.id === currentUserId);
-      if (user) setCurrentUser(user);
+      if (user) {
+        setCurrentUser(user);
+      }
       setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
+      setLoading(false);
       return;
     }
 
     const fetchPerfis = async () => {
-      // Pega o current user
-      const { data: userData } = await supabase.from('profiles').select('*').eq('id', currentUserId).single();
-      if (userData) setCurrentUser(userData as Profile);
-      else {
-        // Fallback pro mock se o dono ainda tiver o ID '99' na memoria mas n existir no banco
-        const mockUser = MOCK_PROFILES.find(p => p.id === currentUserId);
-        if (mockUser) setCurrentUser(mockUser);
-      }
+      try {
+        setLoading(true);
+        // Pega o current user
+        const { data: userData, error: userError } = await supabase.from('profiles').select('*').eq('id', currentUserId).single();
+        
+        if (userData) {
+          setCurrentUser(userData as Profile);
+        } else {
+          // Fallback pro mock se o dono ainda tiver o ID '99' na memoria mas n existir no banco
+          const mockUser = MOCK_PROFILES.find(p => p.id === currentUserId);
+          if (mockUser) {
+            setCurrentUser(mockUser);
+          } else {
+            console.error("Perfil do usuário não encontrado na tabela public.profiles:", userError);
+            // Limpar o ID inválido e redirecionar para o login para que o usuário não fique preso numa tela preta
+            localStorage.removeItem('captain_user_id');
+            localStorage.removeItem('captain_user_email');
+            navigate('/login');
+            return;
+          }
+        }
 
-      // Pega a equipe (dono e barbeiros) para exibir na seleção
-      const { data: equipeData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
-      if (equipeData) setBarbeiros(equipeData as Profile[]);
+        // Pega a equipe (dono e barbeiros) para exibir na seleção
+        const { data: equipeData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
+        if (equipeData) setBarbeiros(equipeData as Profile[]);
+      } catch (err) {
+        console.error("Erro ao carregar dados do agendamento:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchPerfis();
@@ -103,6 +125,14 @@ export function ClientBooking() {
     
     setStep(4);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-graphite-dark flex items-center justify-center">
+        <div className="text-zinc-500 dark:text-zinc-400 font-medium">Carregando...</div>
+      </div>
+    );
+  }
 
   if (!currentUser) return null;
 

@@ -83,15 +83,19 @@ export function ClientBooking() {
 
   const handleCancelBooking = async (booking: Agendamento) => {
     const dataFormatada = format(parseISO(booking.data_hora), "dd/MM 'às' HH:mm");
-    if (!confirm(`Tem certeza de que deseja cancelar seu agendamento de ${booking.servico} para o dia ${dataFormatada}?`)) {
-      return;
+    const motivo = prompt(`Tem certeza de que deseja cancelar seu agendamento de ${booking.servico} para o dia ${dataFormatada}?\n\nPor favor, informe o motivo do cancelamento:`);
+    
+    if (motivo === null) {
+      return; // Usuário cancelou o prompt
     }
     
+    const motivoFinal = motivo.trim() || 'Não informado';
     setLoadingMyBookings(true);
+    
     if (isSupabaseConfigured) {
       const { error } = await supabase
         .from('agendamentos')
-        .update({ status: 'Cancelado' })
+        .update({ status: 'Cancelado', motivo_cancelamento: motivoFinal })
         .eq('id', booking.id);
         
       if (error) {
@@ -99,23 +103,51 @@ export function ClientBooking() {
       } else {
         await logEvent(
           'booking_cancelled_client',
-          `Cliente ${currentUser?.nome} cancelou agendamento de ${booking.servico} para o dia ${dataFormatada}`,
+          `Cliente ${currentUser?.nome} cancelou agendamento de ${booking.servico} para o dia ${dataFormatada}. Motivo: ${motivoFinal}`,
           currentUserId,
           localStorage.getItem('captain_user_email')
         );
-        fetchMyBookings();
+        // Atualiza a lista de "Meus Horários"
+        await fetchMyBookings();
+        // Libera localmente o horário para a aba "Agendar"
+        setAgendamentos(prev => prev.map(a => a.id === booking.id ? { ...a, status: 'Cancelado', motivo_cancelamento: motivoFinal } : a));
+        
+        // Notificar via WhatsApp
+        const barbeiro = barbeiros.find(b => b.id === booking.barbeiro_id);
+        if (barbeiro && barbeiro.telefone) {
+          let numeroLimpo = barbeiro.telefone.replace(/\D/g, '');
+          if (numeroLimpo.length === 11 || numeroLimpo.length === 10) {
+            numeroLimpo = '55' + numeroLimpo;
+          }
+          const msg = `Olá ${barbeiro.nome}! Eu (*${currentUser?.nome || 'Cliente'}*) precisei *CANCELAR* o agendamento de *${booking.servico}* para o dia *${dataFormatada}*.\n\n*Motivo:* ${motivoFinal} ⚓🙏`;
+          window.open(`https://wa.me/${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
       }
     } else {
       const mocks = JSON.parse(localStorage.getItem('captain_mock_agendamentos') || '[]');
-      const updated = mocks.map((a: any) => a.id === booking.id ? { ...a, status: 'Cancelado' } : a);
+      const updated = mocks.map((a: any) => a.id === booking.id ? { ...a, status: 'Cancelado', motivo_cancelamento: motivoFinal } : a);
       localStorage.setItem('captain_mock_agendamentos', JSON.stringify(updated));
+      
       await logEvent(
         'booking_cancelled_client',
-        `Cliente ${currentUser?.nome} cancelou agendamento (Mock) de ${booking.servico} para o dia ${dataFormatada}`,
+        `Cliente ${currentUser?.nome} cancelou agendamento (Mock) de ${booking.servico} para o dia ${dataFormatada}. Motivo: ${motivoFinal}`,
         currentUserId,
         localStorage.getItem('captain_user_email')
       );
-      fetchMyBookings();
+      
+      await fetchMyBookings();
+      setAgendamentos(prev => prev.map(a => a.id === booking.id ? { ...a, status: 'Cancelado', motivo_cancelamento: motivoFinal } : a));
+      
+      // Notificar via WhatsApp (Mock)
+      const barbeiro = barbeiros.find(b => b.id === booking.barbeiro_id);
+      if (barbeiro && barbeiro.telefone) {
+        let numeroLimpo = barbeiro.telefone.replace(/\D/g, '');
+        if (numeroLimpo.length === 11 || numeroLimpo.length === 10) {
+          numeroLimpo = '55' + numeroLimpo;
+        }
+        const msg = `Olá ${barbeiro.nome}! Eu (*${currentUser?.nome || 'Cliente'}*) precisei *CANCELAR* o agendamento de *${booking.servico}* para o dia *${dataFormatada}*.\n\n*Motivo:* ${motivoFinal} (Mock) ⚓🙏`;
+        window.open(`https://wa.me/${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+      }
     }
     setLoadingMyBookings(false);
   };
@@ -632,6 +664,12 @@ export function ClientBooking() {
                           R$ {(SERVICO_INFO[booking.servico as keyof typeof SERVICO_INFO]?.price || 0).toFixed(2)}
                         </span>
                       </div>
+
+                      {isCancelado && booking.motivo_cancelamento && (
+                        <div className="text-[11px] text-red-500/80 dark:text-red-450/90 italic bg-red-500/5 dark:bg-red-500/5 p-2 rounded-xl border border-red-500/10">
+                          <strong>Motivo:</strong> {booking.motivo_cancelamento}
+                        </div>
+                      )}
 
                       {!isCancelado && (
                         <div className="flex gap-2 pt-2">

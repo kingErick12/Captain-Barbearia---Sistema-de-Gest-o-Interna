@@ -234,25 +234,32 @@ export function AdminDashboard() {
   };
 
   const handleUpdateStatus = async (agendamento: Agendamento, novoStatus: 'Confirmado' | 'Cancelado') => {
+    let motivoFinal = '';
+    if (novoStatus === 'Cancelado') {
+      const motivo = prompt("Por favor, informe o motivo do cancelamento pelo estabelecimento:");
+      if (motivo === null) return;
+      motivoFinal = motivo.trim() || 'Cancelado pelo estabelecimento';
+    }
+
     // 1. Atualizar
     if (isSupabaseConfigured) {
-      await supabase.from('agendamentos').update({ status: novoStatus }).eq('id', agendamento.id);
+      await supabase.from('agendamentos').update({ status: novoStatus, motivo_cancelamento: motivoFinal }).eq('id', agendamento.id);
       await logEvent(
         'booking_status_updated',
-        `Status do agendamento de ${agendamento.cliente_nome} alterado para ${novoStatus} por ${currentUser?.nome || 'Administrador'}`,
+        `Status do agendamento de ${agendamento.cliente_nome} alterado para ${novoStatus} por ${currentUser?.nome || 'Administrador'}. Motivo: ${motivoFinal}`,
         currentUser?.id,
         localStorage.getItem('captain_user_email')
       );
       // O realtime fará o fetchAgendamentos() recarregar a tela
     } else {
       setAgendamentos(prev => {
-        const updated = prev.map(a => a.id === agendamento.id ? { ...a, status: novoStatus } : a);
+        const updated = prev.map(a => a.id === agendamento.id ? { ...a, status: novoStatus, motivo_cancelamento: motivoFinal } : a);
         localStorage.setItem('captain_mock_agendamentos', JSON.stringify(updated));
         return updated;
       });
       await logEvent(
         'booking_status_updated',
-        `Status do agendamento de ${agendamento.cliente_nome} alterado para ${novoStatus} (Mock) por ${currentUser?.nome || 'Administrador'}`,
+        `Status do agendamento de ${agendamento.cliente_nome} alterado para ${novoStatus} (Mock) por ${currentUser?.nome || 'Administrador'}. Motivo: ${motivoFinal}`,
         currentUser?.id,
         localStorage.getItem('captain_user_email')
       );
@@ -267,12 +274,47 @@ export function AdminDashboard() {
       if (novoStatus === 'Confirmado') {
         mensagem = `Olá ${agendamento.cliente_nome}! Seu agendamento de ${agendamento.servico} para o dia ${dataFormatada} foi *CONFIRMADO*! Te esperamos na Captain Barbearia. ⚓✂️`;
       } else {
-        mensagem = `Olá ${agendamento.cliente_nome}. Infelizmente não poderemos te atender no dia ${dataFormatada} e seu agendamento precisou ser *Cancelado*. Pedimos desculpas pelo transtorno. Acesse nosso app para escolher um novo horário! ⚓🙏`;
+        mensagem = `Olá ${agendamento.cliente_nome}. Infelizmente não poderemos te atender no dia ${dataFormatada} e seu agendamento precisou ser *CANCELADO*. Motivo: ${motivoFinal}. Pedimos desculpas pelo transtorno. Acesse nosso app para escolher um novo horário! ⚓🙏`;
       }
 
       window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
     } else {
       alert(`Status atualizado para ${novoStatus}, mas o cliente não tem telefone salvo para o WhatsApp.`);
+    }
+  };
+
+  const handleDeletarAgendamento = async (id: string) => {
+    if (!confirm("Deseja realmente remover este agendamento cancelado da agenda? O horário voltará a ficar disponível como vago.")) {
+      return;
+    }
+    
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('agendamentos').delete().eq('id', id);
+      if (error) {
+        alert("Erro ao remover agendamento: " + error.message);
+      } else {
+        await logEvent(
+          'booking_deleted_admin',
+          `Administrador removeu/liberou horário de agendamento cancelado ID: ${id}`,
+          currentUser?.id,
+          localStorage.getItem('captain_user_email')
+        );
+        // Recarregar os agendamentos localmente para atualizar a grade
+        const { data } = await supabase.from('agendamentos').select('*');
+        if (data) setAgendamentos(data as Agendamento[]);
+      }
+    } else {
+      setAgendamentos(prev => {
+        const updated = prev.filter(a => a.id !== id);
+        localStorage.setItem('captain_mock_agendamentos', JSON.stringify(updated));
+        return updated;
+      });
+      await logEvent(
+        'booking_deleted_admin',
+        `Administrador removeu/liberou horário (Mock) de agendamento cancelado ID: ${id}`,
+        currentUser?.id,
+        localStorage.getItem('captain_user_email')
+      );
     }
   };
 
@@ -470,26 +512,29 @@ export function AdminDashboard() {
             {/* Grade de Horários */}
             <div className="space-y-3 mt-8">
               {timeSlots.map((time, index) => {
-                // Filtra os agendamentos daquele horario especifico para o barbeiro selecionado
-                const agendamento = agendamentos.find((a) => {
+                const agendamentosNoHorario = agendamentos.filter((a) => {
                   if (a.barbeiro_id !== selectedBarbeiroId) return false;
-                  if (a.status === 'Cancelado') return false; // Libera o horário na grade se foi cancelado
                   const agendamentoDate = parseISO(a.data_hora);
                   return isSameDay(agendamentoDate, time) && 
                          agendamentoDate.getHours() === time.getHours() && 
                          agendamentoDate.getMinutes() === time.getMinutes();
                 });
 
+                const agendamentoAtivo = agendamentosNoHorario.find(a => a.status !== 'Cancelado');
+                const agendamentoCancelado = agendamentosNoHorario.find(a => a.status === 'Cancelado');
+
                 return (
                   <div 
                     key={index}
                     className={cn(
                       "relative flex p-1 rounded-2xl transition-all",
-                      agendamento 
+                      agendamentoAtivo 
                         ? "bg-white/90 dark:bg-graphite-light border border-zinc-200 dark:border-zinc-800 opacity-95 shadow-sm dark:shadow-none"
-                        : "hover:bg-white/50 dark:hover:bg-graphite-light/50 border border-transparent cursor-pointer backdrop-blur-[2px]"
+                        : agendamentoCancelado
+                          ? "bg-white/50 dark:bg-graphite-light/40 border border-red-500/10 dark:border-red-950/20 opacity-85"
+                          : "hover:bg-white/50 dark:hover:bg-graphite-light/50 border border-transparent cursor-pointer backdrop-blur-[2px]"
                     )}
-                    onClick={() => !agendamento && handleOpenModal(time)}
+                    onClick={() => !agendamentoAtivo && handleOpenModal(time)}
                   >
                     {/* Coluna da Hora */}
                     <div className="w-20 flex flex-col justify-center items-center font-bold text-zinc-500 dark:text-zinc-400 border-r border-zinc-200 dark:border-zinc-800/50">
@@ -498,39 +543,39 @@ export function AdminDashboard() {
 
                     {/* Coluna do Conteúdo */}
                     <div className="flex-1 p-3 ml-2">
-                      {agendamento ? (
+                      {agendamentoAtivo ? (
                         <div className={cn("p-3 rounded-xl border shadow-inner",
-                          agendamento.status === 'Confirmado' ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/50" :
+                          agendamentoAtivo.status === 'Confirmado' ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/50" :
                           "bg-zinc-50 dark:bg-graphite-main border-zinc-100 dark:border-zinc-700/50"
                         )}>
                           <div className="flex justify-between items-start">
                             <p className="font-semibold text-zinc-800 dark:text-white tracking-wide">
-                              {agendamento.cliente_nome}
+                              {agendamentoAtivo.cliente_nome}
                             </p>
                             <span className="text-[10px] uppercase tracking-widest bg-bronze-main/10 text-bronze-main px-2 py-1 rounded-md border border-bronze-main/20">
-                              {agendamento.servico}
+                              {agendamentoAtivo.servico}
                             </span>
                           </div>
                           
                           <div className="mt-3 flex items-center justify-between">
                             <span className={cn(
                               "text-[10px] font-bold uppercase tracking-widest",
-                              agendamento.status === 'Confirmado' ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+                              agendamentoAtivo.status === 'Confirmado' ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
                             )}>
-                              {agendamento.status || 'Pendente'}
+                              {agendamentoAtivo.status || 'Pendente'}
                             </span>
                             
-                            {(!agendamento.status || agendamento.status === 'Pendente') && (
+                            {(!agendamentoAtivo.status || agendamentoAtivo.status === 'Pendente') && (
                               <div className="flex space-x-2">
                                 <button 
-                                  onClick={(e) => { e.stopPropagation(); handleUpdateStatus(agendamento, 'Cancelado'); }}
+                                  onClick={(e) => { e.stopPropagation(); handleUpdateStatus(agendamentoAtivo, 'Cancelado'); }}
                                   className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 transition-colors"
                                   title="Recusar"
                                 >
                                   <X className="w-4 h-4" />
                                 </button>
                                 <button 
-                                  onClick={(e) => { e.stopPropagation(); handleUpdateStatus(agendamento, 'Confirmado'); }}
+                                  onClick={(e) => { e.stopPropagation(); handleUpdateStatus(agendamentoAtivo, 'Confirmado'); }}
                                   className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 transition-colors"
                                   title="Aceitar"
                                 >
@@ -538,6 +583,41 @@ export function AdminDashboard() {
                                 </button>
                               </div>
                             )}
+                          </div>
+                        </div>
+                      ) : agendamentoCancelado ? (
+                        <div className="p-3 rounded-xl border border-red-500/10 dark:border-red-950/20 bg-red-50/5 dark:bg-red-950/5 shadow-inner">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-semibold text-zinc-400 dark:text-zinc-550 tracking-wide line-through">
+                                {agendamentoCancelado.cliente_nome}
+                              </p>
+                              <span className="text-[9px] uppercase font-bold text-red-500 dark:text-red-400 mt-1 block">
+                                Cancelado pelo Cliente
+                              </span>
+                            </div>
+                            <span className="text-[10px] uppercase tracking-widest bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700">
+                              {agendamentoCancelado.servico}
+                            </span>
+                          </div>
+                          
+                          {agendamentoCancelado.motivo_cancelamento && (
+                            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 italic mt-2 bg-white/40 dark:bg-graphite-main/30 p-2 rounded-lg border border-zinc-100 dark:border-zinc-800/80">
+                              <strong>Motivo:</strong> {agendamentoCancelado.motivo_cancelamento}
+                            </div>
+                          )}
+                          
+                          <div className="mt-3 flex items-center justify-between">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeletarAgendamento(agendamentoCancelado.id); }}
+                              className="py-1 px-3 bg-red-100 text-red-600 dark:bg-red-950/20 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/40 text-[9px] font-black uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                            >
+                              Liberar Horário
+                            </button>
+                            
+                            <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 italic">
+                              Toque no slot para reagendar
+                            </span>
                           </div>
                         </div>
                       ) : (

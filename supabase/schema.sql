@@ -116,3 +116,7 @@ USING (
 -- 3. Adicionar colunas email e senha na tabela profiles
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS senha TEXT;
+
+-- 4. Adicionar colunas status e motivo_cancelamento na tabela agendamentos
+ALTER TABLE public.agendamentos ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Pendente';
+ALTER TABLE public.agendamentos ADD COLUMN IF NOT EXISTS motivo_cancelamento TEXT;

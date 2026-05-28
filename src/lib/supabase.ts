@@ -24,6 +24,7 @@ export type Agendamento = {
   data_hora: string;
   barbeiro_id: string;
   status?: 'Pendente' | 'Confirmado' | 'Cancelado';
+  motivo_cancelamento?: string;
 }
 
 export type SystemLog = {

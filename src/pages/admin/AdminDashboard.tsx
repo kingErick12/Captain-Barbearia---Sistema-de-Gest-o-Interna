@@ -79,6 +79,11 @@ export function AdminDashboard() {
             navigate('/agendar');
           } else {
             console.log("[AdminDashboard] Acesso concedido para o perfil.");
+            // Se for e-mail de suporte, força a role como 'adm' no frontend para garantir
+            const normalizedEmail = userEmail.trim().toLowerCase();
+            if (normalizedEmail === 'admin@captain.com' || normalizedEmail === 'admin@admin.com') {
+              profile.role = 'adm';
+            }
             setCurrentUser(profile);
           }
         } else {

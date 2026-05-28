@@ -9,6 +9,8 @@ CREATE TABLE profiles (
     role TEXT NOT NULL CHECK (role IN ('adm', 'dono', 'barbeiro', 'cliente')),
     telefone TEXT,
     avatar_url TEXT,
+    email TEXT,
+    senha TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -110,3 +112,7 @@ USING (
     WHERE id::text = auth.uid()::text AND role = 'adm'
   )
 );
+
+-- 3. Adicionar colunas email e senha na tabela profiles
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS senha TEXT;

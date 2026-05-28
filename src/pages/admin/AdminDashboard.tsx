@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format, setHours, setMinutes, parseISO, isSameDay } from 'date-fns';
+import { format, setHours, setMinutes, parseISO, isSameDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LogOut, CalendarDays, Users, TrendingUp, Check, X, ShieldAlert } from 'lucide-react';
+import { LogOut, CalendarDays, Users, TrendingUp, Check, X, ShieldAlert, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase, isSupabaseConfigured, MOCK_PROFILES, logEvent } from '../../lib/supabase';
 import type { Agendamento, Profile } from '../../lib/supabase';
 import { BookingModal } from '../../components/BookingModal';
@@ -24,7 +24,7 @@ export function AdminDashboard() {
   const isSupport = currentUser?.role === 'adm' || userEmail === 'admin@captain.com' || userEmail === 'admin@admin.com';
   
   const [selectedBarbeiroId, setSelectedBarbeiroId] = useState<string>(currentUserId || '');
-  const [currentDate] = useState<Date>(new Date());
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [activeTab, setActiveTab] = useState<'agenda' | 'stats' | 'equipe' | 'logs'>('agenda');
   
   // Data state
@@ -360,15 +360,109 @@ export function AdminDashboard() {
               </div>
             )}
 
-            {/* Data selecionada */}
-            <div className="flex items-center justify-between bg-white/50 dark:bg-bronze-main/10 border border-zinc-200 dark:border-bronze-main/30 p-4 rounded-2xl shadow-sm backdrop-blur-sm">
-              <div className="flex items-center text-zinc-900 dark:text-bronze-main font-black">
-                <div className="bg-bronze-main p-2 rounded-lg mr-3 shadow-md">
-                  <CalendarDays className="w-5 h-5 text-zinc-900" />
+            {/* Seletor de Datas Interativo */}
+            <div className="bg-white/95 dark:bg-graphite-light p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                {/* Botão Dia Anterior */}
+                <button 
+                  onClick={() => setCurrentDate(prev => addDays(prev, -1))}
+                  className="p-2.5 rounded-xl bg-zinc-50 dark:bg-graphite-main border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-bronze-main dark:hover:border-bronze-main transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Dia Anterior"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+
+                {/* Exibição Central da Data */}
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-400 dark:text-zinc-500 font-black">Data Selecionada</p>
+                  <p className="text-base font-black text-zinc-900 dark:text-white capitalize tracking-tight mt-0.5">
+                    {format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                  </p>
                 </div>
-                <span className="text-lg capitalize tracking-tight">
-                  {format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-                </span>
+
+                {/* Botão Escolher Data Arbitrária */}
+                <div className="relative">
+                  <button 
+                    onClick={() => {
+                      const picker = document.getElementById('admin-date-picker') as HTMLInputElement | null;
+                      if (picker && typeof picker.showPicker === 'function') {
+                        picker.showPicker();
+                      } else if (picker) {
+                        picker.click();
+                      }
+                    }}
+                    className="p-2.5 rounded-xl bg-zinc-50 dark:bg-graphite-main border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-bronze-main dark:hover:border-bronze-main transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Escolher no Calendário"
+                  >
+                    <CalendarDays className="w-5 h-5 text-bronze-main" />
+                  </button>
+                  <input 
+                    type="date"
+                    id="admin-date-picker"
+                    value={format(currentDate, 'yyyy-MM-dd')}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const selectedDatePart = e.target.value.split('-');
+                        const localDate = new Date(
+                          parseInt(selectedDatePart[0]),
+                          parseInt(selectedDatePart[1]) - 1,
+                          parseInt(selectedDatePart[2])
+                        );
+                        setCurrentDate(localDate);
+                      }
+                    }}
+                    className="absolute inset-0 opacity-0 pointer-events-none w-0 h-0"
+                  />
+                </div>
+
+                {/* Botão Próximo Dia */}
+                <button 
+                  onClick={() => setCurrentDate(prev => addDays(prev, 1))}
+                  className="p-2.5 rounded-xl bg-zinc-50 dark:bg-graphite-main border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-bronze-main dark:hover:border-bronze-main transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Próximo Dia"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Botões Rápidos e Seletor de Próximos Dias */}
+              <div className="border-t border-zinc-100 dark:border-zinc-800/80 pt-3 flex flex-col md:flex-row gap-3 items-center justify-between">
+                {/* Botão Hoje */}
+                <button
+                  onClick={() => setCurrentDate(new Date())}
+                  disabled={isSameDay(currentDate, new Date())}
+                  className={cn(
+                    "px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-xl transition-all w-full md:w-auto text-center border",
+                    isSameDay(currentDate, new Date())
+                      ? "bg-zinc-50 dark:bg-graphite-main text-zinc-400 dark:text-zinc-600 border-zinc-200 dark:border-zinc-800 cursor-not-allowed opacity-60"
+                      : "bg-bronze-main text-graphite-dark border-bronze-main shadow-md hover:scale-105 active:scale-95 cursor-pointer"
+                  )}
+                >
+                  Ir para Hoje
+                </button>
+
+                {/* Lista Horizontal de Dias */}
+                <div className="flex gap-2 overflow-x-auto pb-1 w-full scrollbar-hide justify-start md:justify-end">
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => {
+                    const date = addDays(new Date(), d);
+                    const isSelected = isSameDay(date, currentDate);
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => setCurrentDate(date)}
+                        className={cn(
+                          "flex flex-col items-center justify-center p-2 rounded-xl border min-w-[55px] transition-all cursor-pointer",
+                          isSelected
+                            ? "bg-bronze-main text-graphite-dark border-bronze-main shadow-md"
+                            : "bg-zinc-50 dark:bg-graphite-main text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"
+                        )}
+                      >
+                        <span className="text-[8px] uppercase font-bold">{format(date, 'EEE', { locale: ptBR }).substring(0, 3)}</span>
+                        <span className="text-sm font-black">{format(date, 'dd')}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 

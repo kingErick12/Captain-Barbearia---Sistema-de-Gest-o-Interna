@@ -184,8 +184,9 @@ export function AdminDashboard() {
   const handleSaveAgendamento = async (clienteNome: string, servico: 'Corte' | 'Barba' | 'Combo') => {
     if (!selectedTimeSlot) return;
     
+    const generatedId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7);
     const newAgendamento: Agendamento = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generatedId,
       cliente_id: 'cliente_mock',
       cliente_nome: clienteNome,
       servico: servico,
@@ -197,11 +198,11 @@ export function AdminDashboard() {
     const dataFormatada = format(selectedTimeSlot, "dd/MM 'às' HH:mm");
 
     if (isSupabaseConfigured) {
-      // Remove o id temporário para que o Supabase gere um UUID válido automaticamente
-      const { id, ...supabasePayload } = newAgendamento;
-      const { error } = await supabase.from('agendamentos').insert([supabasePayload]);
+      const { error } = await supabase.from('agendamentos').insert([newAgendamento]);
       if (error) {
         console.error("Erro ao inserir:", error);
+        alert("Erro ao salvar agendamento: " + error.message);
+        return;
       } else {
         await logEvent(
           'booking_created_admin',

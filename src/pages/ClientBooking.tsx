@@ -104,7 +104,9 @@ export function ClientBooking() {
   const handleConfirm = async () => {
     if (!selectedBarbeiro || !selectedServico || !selectedTimeSlot || !currentUser) return;
 
+    const generatedId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7);
     const newAgendamento = {
+      id: generatedId,
       cliente_id: currentUser.id,
       cliente_nome: currentUser.nome,
       cliente_telefone: currentUser.telefone || '',
@@ -121,6 +123,8 @@ export function ClientBooking() {
       const { error } = await supabase.from('agendamentos').insert([newAgendamento]);
       if (error) {
         console.error("Erro ao agendar:", error);
+        alert("Erro ao realizar o agendamento no banco de dados: " + error.message);
+        return;
       } else {
         await logEvent(
           'booking_created', 
@@ -131,7 +135,7 @@ export function ClientBooking() {
       }
     } else {
       const current = JSON.parse(localStorage.getItem('captain_mock_agendamentos') || '[]');
-      current.push({ ...newAgendamento, id: Math.random().toString(36).substring(7) });
+      current.push({ ...newAgendamento, id: generatedId });
       localStorage.setItem('captain_mock_agendamentos', JSON.stringify(current));
       await logEvent(
         'booking_created', 
@@ -251,18 +255,23 @@ export function ClientBooking() {
                 // Verificar se está ocupado
                 const ocupado = agendamentos.some(a => {
                   if (a.barbeiro_id !== selectedBarbeiro) return false;
+                  if (a.status === 'Cancelado') return false;
                   const ad = parseISO(a.data_hora);
                   return isSameDay(ad, time) && ad.getHours() === time.getHours() && ad.getMinutes() === time.getMinutes();
                 });
 
+                // Verificar se o horário já passou (caso seja hoje)
+                const isPast = isSameDay(time, new Date()) && time.getTime() < new Date().getTime();
+                const ocupadoOuPassado = ocupado || isPast;
+
                 return (
                   <button
                     key={idx}
-                    disabled={ocupado}
+                    disabled={ocupadoOuPassado}
                     onClick={() => setSelectedTimeSlot(time)}
                     className={cn(
                       "p-3 rounded-xl text-center font-bold text-sm transition-all border",
-                      ocupado 
+                      ocupadoOuPassado 
                         ? "bg-zinc-100 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-600 border-transparent opacity-50 cursor-not-allowed"
                         : selectedTimeSlot && time.getTime() === selectedTimeSlot.getTime()
                           ? "bg-bronze-main text-graphite-dark border-bronze-main shadow-[0_0_15px_rgba(197,160,89,0.3)]"

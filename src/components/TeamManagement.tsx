@@ -7,6 +7,12 @@ type TeamManagementProps = {
   currentUser?: Profile | null;
 }
 
+function generateUniqueId() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID 
+    ? crypto.randomUUID() 
+    : Math.random().toString(36).substring(7);
+}
+
 export function TeamManagement({ currentUser }: TeamManagementProps) {
   const currentUserId = localStorage.getItem('captain_user_id');
   const [nome, setNome] = useState('');
@@ -16,14 +22,16 @@ export function TeamManagement({ currentUser }: TeamManagementProps) {
   const [role, setRole] = useState<'barbeiro' | 'dono' | 'adm'>('barbeiro');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [barbeiros, setBarbeiros] = useState<Profile[]>([]);
+  const [barbeiros, setBarbeiros] = useState<Profile[]>(() => {
+    if (!isSupabaseConfigured) {
+      return MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono' || p.role === 'adm');
+    }
+    return [];
+  });
 
   // Buscar equipe atual do banco (inclui barbeiros, donos e adms se houver)
   useEffect(() => {
-    if (!isSupabaseConfigured) {
-      setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono' || p.role === 'adm'));
-      return;
-    }
+    if (!isSupabaseConfigured) return;
 
     const fetchEquipe = async () => {
       const { data } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono', 'adm']);
@@ -46,7 +54,7 @@ export function TeamManagement({ currentUser }: TeamManagementProps) {
     }
 
     if (isSupabaseConfigured) {
-      const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7);
+      const newId = generateUniqueId();
       
       const { error } = await supabase.from('profiles').insert([{
         id: newId,

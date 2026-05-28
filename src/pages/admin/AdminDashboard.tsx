@@ -129,7 +129,7 @@ export function AdminDashboard() {
     };
 
     loadUser();
-  }, [currentUserId, navigate]);
+  }, [currentUserId, navigate, userEmail]);
 
   // Busca e Realtime dos Agendamentos e Equipe
   useEffect(() => {

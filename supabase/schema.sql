@@ -6,7 +6,7 @@
 CREATE TABLE profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     nome TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('dono', 'barbeiro', 'cliente')),
+    role TEXT NOT NULL CHECK (role IN ('adm', 'dono', 'barbeiro', 'cliente')),
     telefone TEXT,
     avatar_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
@@ -73,3 +73,40 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- =========================================================================
+-- MIGRAÇÕES DE ATUALIZAÇÃO (Para rodar em bancos de dados já existentes)
+-- =========================================================================
+
+-- 1. Atualizar a restrição de papéis (roles) para suportar 'adm'
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('adm', 'dono', 'barbeiro', 'cliente'));
+
+-- 2. Criar tabela de Logs de Eventos do Sistema
+CREATE TABLE IF NOT EXISTS public.system_logs (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    user_id UUID,
+    user_email TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 3. Habilitar RLS para system_logs
+ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
+
+-- 4. Criar políticas RLS para system_logs (segurança de leitura restrita ao suporte)
+DROP POLICY IF EXISTS "Permitir inserção de logs para todos" ON public.system_logs;
+CREATE POLICY "Permitir inserção de logs para todos" 
+ON public.system_logs FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Apenas suporte pode visualizar logs" ON public.system_logs;
+CREATE POLICY "Apenas suporte pode visualizar logs" 
+ON public.system_logs FOR SELECT TO authenticated 
+USING (
+  auth.jwt() ->> 'email' IN ('admin@captain.com', 'admin@admin.com') OR 
+  EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = auth.uid() AND role = 'adm'
+  )
+);

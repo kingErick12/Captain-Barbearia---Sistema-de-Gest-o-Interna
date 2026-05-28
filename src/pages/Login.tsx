@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, User, AlertCircle, Phone } from 'lucide-react';
-import { MOCK_PROFILES, isSupabaseConfigured, supabase } from '../lib/supabase';
+import { MOCK_PROFILES, isSupabaseConfigured, supabase, logEvent } from '../lib/supabase';
 import type { Profile } from '../lib/supabase';
 import { cn } from '../lib/utils';
 
@@ -52,9 +52,10 @@ export function Login() {
             setError(signUpError.message);
             setLoading(false);
           } else if (data.user) {
-            // Aqui a trigger no banco deve criar o profile. Assumimos sucesso.
-            // Na vida real precisaria esperar a trigger ou ler da db.
+            const normalizedEmail = email.trim().toLowerCase();
             localStorage.setItem('captain_user_id', data.user.id);
+            localStorage.setItem('captain_user_email', normalizedEmail);
+            await logEvent('signup', `Novo cliente cadastrado: ${nome} (${normalizedEmail})`, data.user.id, normalizedEmail);
             navigate('/agendar'); // Novo usuário é cliente
           }
         } else {
@@ -77,6 +78,7 @@ export function Login() {
               // Se for o email do admin/suporte, pula a validação de erro do perfil e manda direto para /admin
               if (normalizedEmail === 'admin@captain.com' || normalizedEmail === 'admin@admin.com') {
                 console.log("Login: E-mail administrativo detectado:", normalizedEmail);
+                await logEvent('login_admin', `Login administrativo do suporte efetuado: ${normalizedEmail}`, profileId, normalizedEmail);
                 navigate('/admin');
                 return;
               }
@@ -90,6 +92,9 @@ export function Login() {
                 setLoading(false);
                 return;
               }
+
+              await logEvent('login', `Login de usuário efetuado (${profileData?.role}): ${normalizedEmail}`, profileId, normalizedEmail);
+
               if (profileData?.role === 'cliente') {
                 navigate('/agendar');
               } else {
@@ -103,7 +108,7 @@ export function Login() {
         }
       } else {
         // MOCK LOGIC
-        setTimeout(() => {
+        setTimeout(async () => {
           try {
             if (isSignUp) {
               const mockUsers = JSON.parse(localStorage.getItem('captain_mock_users') || '{}');
@@ -122,6 +127,9 @@ export function Login() {
                 
                 mockUsers[email] = { password, profileId: newId };
                 localStorage.setItem('captain_mock_users', JSON.stringify(mockUsers));
+                localStorage.setItem('captain_user_email', email);
+                
+                await logEvent('signup', `Novo cliente cadastrado: ${nome} (${email}) (Mock)`, newId, email);
                 routeUser(newId);
               }
             } else {
@@ -132,8 +140,12 @@ export function Login() {
               
               const normalizedEmail = email.trim().toLowerCase();
               if (user && user.password === password) {
+                localStorage.setItem('captain_user_email', normalizedEmail);
+                await logEvent('login', `Login de usuário efetuado: ${normalizedEmail} (Mock)`, user.profileId, normalizedEmail);
                 routeUser(user.profileId);
               } else if (normalizedEmail === 'admin@admin.com' || normalizedEmail === 'admin@captain.com') {
+                localStorage.setItem('captain_user_email', normalizedEmail);
+                await logEvent('login_admin', `Login administrativo do suporte efetuado: ${normalizedEmail} (Mock)`, '99', normalizedEmail);
                 routeUser('99'); // Admin Suporte
               } else {
                 setError("E-mail ou senha inválidos. (Dica: tente admin@admin.com ou admin@captain.com para dono)");

@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, setHours, setMinutes, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LogOut, CalendarDays, Users, TrendingUp, Check, X } from 'lucide-react';
-import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../../lib/supabase';
+import { LogOut, CalendarDays, Users, TrendingUp, Check, X, ShieldAlert } from 'lucide-react';
+import { supabase, isSupabaseConfigured, MOCK_PROFILES, logEvent } from '../../lib/supabase';
 import type { Agendamento, Profile } from '../../lib/supabase';
 import { BookingModal } from '../../components/BookingModal';
 import { FinancialDashboard } from '../../components/FinancialDashboard';
 import { TeamManagement } from '../../components/TeamManagement';
+import { SystemLogs } from '../../components/SystemLogs';
 import { PwaInstallButton } from '../../components/PwaInstallButton';
 import { cn } from '../../lib/utils';
 
@@ -16,12 +17,15 @@ export function AdminDashboard() {
   
   // Auth state
   const currentUserId = localStorage.getItem('captain_user_id');
+  const userEmail = localStorage.getItem('captain_user_email') || '';
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   
+  const isSupport = currentUser?.role === 'adm' || userEmail === 'admin@captain.com' || userEmail === 'admin@admin.com';
+  
   const [selectedBarbeiroId, setSelectedBarbeiroId] = useState<string>(currentUserId || '');
   const [currentDate] = useState<Date>(new Date());
-  const [activeTab, setActiveTab] = useState<'agenda' | 'stats' | 'equipe'>('agenda');
+  const [activeTab, setActiveTab] = useState<'agenda' | 'stats' | 'equipe' | 'logs'>('agenda');
   
   // Data state
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
@@ -92,7 +96,7 @@ export function AdminDashboard() {
             setCurrentUser({
               id: currentUserId || '99',
               nome: 'Administrador Suporte',
-              role: 'dono',
+              role: 'adm',
               telefone: '11999999999'
             });
           } else {
@@ -127,7 +131,7 @@ export function AdminDashboard() {
     if (!isSupabaseConfigured) {
       const mocks = JSON.parse(localStorage.getItem('captain_mock_agendamentos') || '[]');
       setAgendamentos(mocks);
-      setEquipe(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
+      setEquipe(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono' || p.role === 'adm'));
       return;
     }
 
@@ -135,7 +139,7 @@ export function AdminDashboard() {
       const { data: agData } = await supabase.from('agendamentos').select('*');
       if (agData) setAgendamentos(agData as Agendamento[]);
 
-      const { data: eqData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
+      const { data: eqData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono', 'adm']);
       if (eqData) setEquipe(eqData as Profile[]);
     };
 
@@ -184,9 +188,21 @@ export function AdminDashboard() {
       barbeiro_id: selectedBarbeiroId
     };
 
+    const barbeiroNome = equipe.find(e => e.id === selectedBarbeiroId)?.nome || 'Profissional';
+    const dataFormatada = format(selectedTimeSlot, "dd/MM 'às' HH:mm");
+
     if (isSupabaseConfigured) {
       const { error } = await supabase.from('agendamentos').insert([newAgendamento]);
-      if (error) console.error("Erro ao inserir:", error);
+      if (error) {
+        console.error("Erro ao inserir:", error);
+      } else {
+        await logEvent(
+          'booking_created_admin',
+          `Agendamento criado por Administrador: Cliente ${clienteNome} marcou ${servico} com o profissional ${barbeiroNome} para o dia ${dataFormatada}`,
+          currentUser?.id,
+          localStorage.getItem('captain_user_email')
+        );
+      }
     } else {
       // MOCK
       const mockAgendamento: Agendamento = {
@@ -198,6 +214,12 @@ export function AdminDashboard() {
         localStorage.setItem('captain_mock_agendamentos', JSON.stringify(updated));
         return updated;
       });
+      await logEvent(
+        'booking_created_admin',
+        `Agendamento criado por Administrador (Mock): Cliente ${clienteNome} marcou ${servico} com o profissional ${barbeiroNome} para o dia ${dataFormatada}`,
+        currentUser?.id,
+        localStorage.getItem('captain_user_email')
+      );
     }
     
     setIsModalOpen(false);
@@ -207,6 +229,12 @@ export function AdminDashboard() {
     // 1. Atualizar
     if (isSupabaseConfigured) {
       await supabase.from('agendamentos').update({ status: novoStatus }).eq('id', agendamento.id);
+      await logEvent(
+        'booking_status_updated',
+        `Status do agendamento de ${agendamento.cliente_nome} alterado para ${novoStatus} por ${currentUser?.nome || 'Administrador'}`,
+        currentUser?.id,
+        localStorage.getItem('captain_user_email')
+      );
       // O realtime fará o fetchAgendamentos() recarregar a tela
     } else {
       setAgendamentos(prev => {
@@ -214,6 +242,12 @@ export function AdminDashboard() {
         localStorage.setItem('captain_mock_agendamentos', JSON.stringify(updated));
         return updated;
       });
+      await logEvent(
+        'booking_status_updated',
+        `Status do agendamento de ${agendamento.cliente_nome} alterado para ${novoStatus} (Mock) por ${currentUser?.nome || 'Administrador'}`,
+        currentUser?.id,
+        localStorage.getItem('captain_user_email')
+      );
     }
 
     // 2. WhatsApp
@@ -283,12 +317,14 @@ export function AdminDashboard() {
 
       <main className="max-w-3xl mx-auto px-4 mt-6 space-y-6">
         
-        {activeTab === 'stats' ? (
+        {activeTab === 'stats' && (currentUser.role === 'dono' || currentUser.role === 'adm') ? (
           <div className="animate-in fade-in slide-in-from-right-8 duration-500">
             <FinancialDashboard currentUser={currentUser} agendamentos={agendamentos} />
           </div>
-        ) : activeTab === 'equipe' && currentUser.role === 'dono' ? (
-          <TeamManagement />
+        ) : activeTab === 'equipe' && (currentUser.role === 'dono' || currentUser.role === 'adm') ? (
+          <TeamManagement currentUser={currentUser} />
+        ) : activeTab === 'logs' && isSupport ? (
+          <SystemLogs />
         ) : (
           <div className="animate-in fade-in slide-in-from-left-8 duration-500 space-y-6">
             {/* Filtro de Barbeiro (Apenas para o Dono) */}
@@ -431,20 +467,22 @@ export function AdminDashboard() {
           <span className="text-[10px] font-bold uppercase tracking-wider">Agenda</span>
         </button>
         
-        <button
-          onClick={() => setActiveTab('stats')}
-          className={cn(
-            "flex flex-col items-center justify-center flex-1 py-1 px-3 rounded-2xl transition-all duration-300",
-            activeTab === 'stats' 
-              ? "text-bronze-main bg-bronze-main/10" 
-              : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-          )}
-        >
-          <TrendingUp className="w-6 h-6 mb-0.5" />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Dashboard</span>
-        </button>
+        {(currentUser.role === 'dono' || currentUser.role === 'adm') && (
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 px-3 rounded-2xl transition-all duration-300",
+              activeTab === 'stats' 
+                ? "text-bronze-main bg-bronze-main/10" 
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            )}
+          >
+            <TrendingUp className="w-6 h-6 mb-0.5" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Dashboard</span>
+          </button>
+        )}
         
-        {currentUser.role === 'dono' && (
+        {(currentUser.role === 'dono' || currentUser.role === 'adm') && (
           <button
             onClick={() => setActiveTab('equipe')}
             className={cn(
@@ -456,6 +494,21 @@ export function AdminDashboard() {
           >
             <Users className="w-6 h-6 mb-0.5" />
             <span className="text-[10px] font-bold uppercase tracking-wider">Equipe</span>
+          </button>
+        )}
+
+        {isSupport && (
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 px-3 rounded-2xl transition-all duration-300",
+              activeTab === 'logs' 
+                ? "text-bronze-main bg-bronze-main/10" 
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            )}
+          >
+            <ShieldAlert className="w-6 h-6 mb-0.5" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Logs</span>
           </button>
         )}
       </nav>

@@ -1,28 +1,32 @@
 import { useState, useEffect } from 'react';
 import { UserPlus, Mail, Phone, Lock, User, Shield, Trash2 } from 'lucide-react';
-import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, MOCK_PROFILES, logEvent } from '../lib/supabase';
 import type { Profile } from '../lib/supabase';
 
-export function TeamManagement() {
+type TeamManagementProps = {
+  currentUser?: Profile | null;
+}
+
+export function TeamManagement({ currentUser }: TeamManagementProps) {
   const currentUserId = localStorage.getItem('captain_user_id');
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'barbeiro' | 'dono'>('barbeiro');
+  const [role, setRole] = useState<'barbeiro' | 'dono' | 'adm'>('barbeiro');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [barbeiros, setBarbeiros] = useState<Profile[]>([]);
 
-  // Buscar equipe atual do banco
+  // Buscar equipe atual do banco (inclui barbeiros, donos e adms se houver)
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono'));
+      setBarbeiros(MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono' || p.role === 'adm'));
       return;
     }
 
     const fetchEquipe = async () => {
-      const { data } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
+      const { data } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono', 'adm']);
       if (data) setBarbeiros(data as Profile[]);
     };
 
@@ -33,6 +37,13 @@ export function TeamManagement() {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
+
+    // Garantir que um "dono" comum não consiga cadastrar um "adm" caso intercepte o select
+    if (role === 'adm' && currentUser?.role !== 'adm') {
+      setMessage({ type: 'error', text: 'Permissão negada. Apenas administradores do suporte podem criar contas de Administrador.' });
+      setLoading(false);
+      return;
+    }
 
     if (isSupabaseConfigured) {
       const newId = Math.random().toString(36).substring(7);
@@ -49,14 +60,21 @@ export function TeamManagement() {
       if (error) {
         setMessage({ type: 'error', text: error.message });
       } else {
-        setMessage({ type: 'success', text: 'Membro da equipe adicionado com sucesso!' });
+        setMessage({ type: 'success', text: `Membro da equipe (${role}) adicionado com sucesso!` });
         setNome(''); setEmail(''); setTelefone(''); setPassword('');
         // Atualiza a lista da tela
         setBarbeiros(prev => [...prev, { id: newId, nome, role, telefone } as Profile]);
+        
+        await logEvent(
+          'team_member_added',
+          `Membro da equipe adicionado: ${nome} com o cargo ${role} (E-mail: ${email}) por ${currentUser?.nome || 'Administrador'}`,
+          currentUserId,
+          localStorage.getItem('captain_user_email')
+        );
       }
     } else {
       // Mock logic
-      setTimeout(() => {
+      setTimeout(async () => {
         const mockUsers = JSON.parse(localStorage.getItem('captain_mock_users') || '{}');
         if (mockUsers[email]) {
           setMessage({ type: 'error', text: 'E-mail já cadastrado no sistema.' });
@@ -67,8 +85,15 @@ export function TeamManagement() {
           mockUsers[email] = { password, profileId: newId };
           localStorage.setItem('captain_mock_users', JSON.stringify(mockUsers));
           
-          setMessage({ type: 'success', text: `${role === 'dono' ? 'Dono' : 'Barbeiro'} adicionado! (Mock)` });
+          setMessage({ type: 'success', text: `${role === 'adm' ? 'Administrador' : role === 'dono' ? 'Dono' : 'Barbeiro'} adicionado! (Mock)` });
           setNome(''); setEmail(''); setTelefone(''); setPassword('');
+
+          await logEvent(
+            'team_member_added',
+            `Membro da equipe adicionado: ${nome} com o cargo ${role} (E-mail: ${email}) (Mock) por ${currentUser?.nome || 'Administrador'}`,
+            currentUserId,
+            localStorage.getItem('captain_user_email')
+          );
         }
         setLoading(false);
       }, 800);
@@ -76,16 +101,31 @@ export function TeamManagement() {
   };
 
   const handleDeleteBarbeiro = async (id: string) => {
-    if (confirm("Tem certeza que deseja remover este membro da equipe?")) {
+    const member = barbeiros.find(b => b.id === id);
+    if (!member) return;
+
+    if (confirm(`Tem certeza que deseja remover ${member.nome} (${member.role}) da equipe?`)) {
       if (isSupabaseConfigured) {
         const { error } = await supabase.from('profiles').delete().eq('id', id);
         if (!error) {
           setBarbeiros(prev => prev.filter(p => p.id !== id));
+          await logEvent(
+            'team_member_deleted',
+            `Membro da equipe removido: ${member.nome} (Cargo: ${member.role}, ID: ${id}) por ${currentUser?.nome || 'Administrador'}`,
+            currentUserId,
+            localStorage.getItem('captain_user_email')
+          );
         } else {
           alert("Erro ao excluir: " + error.message);
         }
       } else {
         setBarbeiros(prev => prev.filter(p => p.id !== id));
+        await logEvent(
+          'team_member_deleted',
+          `Membro da equipe removido (Mock): ${member.nome} (Cargo: ${member.role}, ID: ${id}) por ${currentUser?.nome || 'Administrador'}`,
+          currentUserId,
+          localStorage.getItem('captain_user_email')
+        );
       }
     }
   };
@@ -144,7 +184,10 @@ export function TeamManagement() {
                 <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                 <select value={role} onChange={(e) => setRole(e.target.value as any)} className="w-full bg-zinc-50 dark:bg-graphite-main pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 focus:border-bronze-main outline-none text-zinc-900 dark:text-white appearance-none">
                   <option value="barbeiro">Barbeiro (Ver própria agenda)</option>
-                  <option value="dono">Dono (Acesso total)</option>
+                  <option value="dono">Dono (Visualizar equipe, dashboard e agendas)</option>
+                  {currentUser?.role === 'adm' && (
+                    <option value="adm">Administrador Suporte (Acesso total + Logs)</option>
+                  )}
                 </select>
               </div>
             </div>
@@ -184,7 +227,7 @@ export function TeamManagement() {
                 </div>
               </div>
               
-              {/* Botão de Excluir (visível para qualquer membro que não seja o próprio usuário logado) */}
+              {/* Botão de Excluir */}
               {b.id !== currentUserId && (
                 <button 
                   onClick={() => handleDeleteBarbeiro(b.id)}

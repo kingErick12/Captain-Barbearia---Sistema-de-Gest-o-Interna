@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { format, setHours, setMinutes, parseISO, isSameDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Scissors, CheckCircle, ChevronLeft, LogOut } from 'lucide-react';
-import { supabase, isSupabaseConfigured, MOCK_PROFILES } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, MOCK_PROFILES, logEvent } from '../lib/supabase';
 import type { Agendamento, Profile } from '../lib/supabase';
 import { cn } from '../lib/utils';
 
@@ -114,13 +114,31 @@ export function ClientBooking() {
       status: 'Pendente'
     };
 
+    const barbeiroNome = barbeiros.find(b => b.id === selectedBarbeiro)?.nome || 'Profissional';
+    const dataFormatada = format(selectedTimeSlot, "dd/MM 'às' HH:mm");
+
     if (isSupabaseConfigured) {
       const { error } = await supabase.from('agendamentos').insert([newAgendamento]);
-      if (error) console.error("Erro ao agendar:", error);
+      if (error) {
+        console.error("Erro ao agendar:", error);
+      } else {
+        await logEvent(
+          'booking_created', 
+          `Agendamento criado: Cliente ${currentUser.nome} marcou ${selectedServico} com o profissional ${barbeiroNome} para o dia ${dataFormatada}`,
+          currentUser.id,
+          localStorage.getItem('captain_user_email')
+        );
+      }
     } else {
       const current = JSON.parse(localStorage.getItem('captain_mock_agendamentos') || '[]');
       current.push({ ...newAgendamento, id: Math.random().toString(36).substring(7) });
       localStorage.setItem('captain_mock_agendamentos', JSON.stringify(current));
+      await logEvent(
+        'booking_created', 
+        `Agendamento criado (Mock): Cliente ${currentUser.nome} marcou ${selectedServico} com o profissional ${barbeiroNome} para o dia ${dataFormatada}`,
+        currentUser.id,
+        localStorage.getItem('captain_user_email')
+      );
     }
     
     setStep(4);

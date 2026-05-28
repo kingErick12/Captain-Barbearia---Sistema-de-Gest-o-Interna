@@ -46,7 +46,7 @@ export function TeamManagement({ currentUser }: TeamManagementProps) {
     }
 
     if (isSupabaseConfigured) {
-      const newId = Math.random().toString(36).substring(7);
+      const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7);
       
       const { error } = await supabase.from('profiles').insert([{
         id: newId,

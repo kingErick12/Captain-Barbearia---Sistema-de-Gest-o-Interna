@@ -197,7 +197,9 @@ export function AdminDashboard() {
     const dataFormatada = format(selectedTimeSlot, "dd/MM 'às' HH:mm");
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('agendamentos').insert([newAgendamento]);
+      // Remove o id temporário para que o Supabase gere um UUID válido automaticamente
+      const { id, ...supabasePayload } = newAgendamento;
+      const { error } = await supabase.from('agendamentos').insert([supabasePayload]);
       if (error) {
         console.error("Erro ao inserir:", error);
       } else {

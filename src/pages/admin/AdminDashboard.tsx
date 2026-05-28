@@ -332,8 +332,8 @@ export function AdminDashboard() {
           <SystemLogs />
         ) : (
           <div className="animate-in fade-in slide-in-from-left-8 duration-500 space-y-6">
-            {/* Filtro de Barbeiro (Apenas para o Dono) */}
-            {currentUser.role === 'dono' && (
+            {/* Filtro de Barbeiro (Para Dono e Adm) */}
+            {(currentUser.role === 'dono' || currentUser.role === 'adm') && (
               <div className="bg-white/90 dark:bg-graphite-light p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none backdrop-blur-md">
                 <h3 className="text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center">
                   <Users className="w-4 h-4 mr-2" />

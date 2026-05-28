@@ -304,7 +304,7 @@ export function ClientBooking() {
                 onClick={() => {
                   const barbeiro = barbeiros.find(b => b.id === selectedBarbeiro);
                   if (barbeiro && selectedTimeSlot) {
-                    let numeroLimpo = barbeiro.telefone.replace(/\D/g, '');
+                    let numeroLimpo = (barbeiro.telefone || '').replace(/\D/g, '');
                     if (numeroLimpo.length === 11 || numeroLimpo.length === 10) {
                       numeroLimpo = '55' + numeroLimpo;
                     }

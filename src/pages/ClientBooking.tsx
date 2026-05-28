@@ -295,8 +295,30 @@ export function ClientBooking() {
               Agendado!
             </h2>
             <p className="text-zinc-500 dark:text-zinc-400 mb-8 px-4">
-              Seu horário está confirmado. Você receberá uma notificação em breve.
+              Seu horário está reservado. Notifique seu barbeiro no WhatsApp para agilizar a confirmação!
             </p>
+            
+            {/* Botão de notificar barbeiro */}
+            {barbeiros.find(b => b.id === selectedBarbeiro)?.telefone && (
+              <button
+                onClick={() => {
+                  const barbeiro = barbeiros.find(b => b.id === selectedBarbeiro);
+                  if (barbeiro && selectedTimeSlot) {
+                    let numeroLimpo = barbeiro.telefone.replace(/\D/g, '');
+                    if (numeroLimpo.length === 11 || numeroLimpo.length === 10) {
+                      numeroLimpo = '55' + numeroLimpo;
+                    }
+                    const dataFormatada = format(selectedTimeSlot, "dd/MM 'às' HH:mm");
+                    const msg = `Olá ${barbeiro.nome}! Acabei de fazer um agendamento de *${selectedServico}* para o dia *${dataFormatada}* no seu nome pelo aplicativo. ⚓✂️`;
+                    window.open(`https://wa.me/${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+                  }
+                }}
+                className="w-full py-4 mb-4 bg-green-600 hover:bg-green-700 text-white font-bold uppercase tracking-widest rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2"
+              >
+                <span>Notificar Barbeiro no WhatsApp</span>
+              </button>
+            )}
+
             <button
               onClick={() => { setStep(1); setSelectedTimeSlot(null); navigate('/'); }}
               className="w-full py-4 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold uppercase tracking-widest rounded-2xl"

@@ -61,7 +61,7 @@ RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, nome, role, telefone)
   VALUES (
-    new.id,
+    new.id::text,
     coalesce(new.raw_user_meta_data->>'nome', 'Cliente'),
     coalesce(new.raw_user_meta_data->>'role', 'cliente'),
     new.raw_user_meta_data->>'telefone'
@@ -107,6 +107,6 @@ USING (
   auth.jwt() ->> 'email' IN ('admin@captain.com', 'admin@admin.com') OR 
   EXISTS (
     SELECT 1 FROM public.profiles 
-    WHERE id = auth.uid() AND role = 'adm'
+    WHERE id::text = auth.uid()::text AND role = 'adm'
   )
 );

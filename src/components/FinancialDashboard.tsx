@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { useMemo, useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, CartesianGrid, Sector } from 'recharts';
 import { DollarSign, TrendingUp } from 'lucide-react';
 import type { Agendamento, Profile } from '../lib/supabase';
 import { MOCK_PROFILES } from '../lib/supabase';
@@ -16,8 +16,81 @@ const TABELA_PRECOS = {
 };
 
 const PIE_COLORS = ['#C5A059', '#3f3f46', '#B08B4B'];
+const GenericPie = Pie as any;
 
 export function FinancialDashboard({ agendamentos, currentUser }: FinancialDashboardProps) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, value } = props;
+    const price = TABELA_PRECOS[payload.name as keyof typeof TABELA_PRECOS] || 0;
+    const totalValue = value * price;
+
+    return (
+      <g>
+        <text 
+          x={cx} 
+          y={cy} 
+          dy={-18} 
+          textAnchor="middle" 
+          fill="currentColor" 
+          className="text-zinc-800 dark:text-zinc-100 font-black text-sm uppercase tracking-wide"
+        >
+          {payload.name}
+        </text>
+        <text 
+          x={cx} 
+          y={cy} 
+          dy={8} 
+          textAnchor="middle" 
+          fill="#C5A059" 
+          className="font-black text-2xl"
+        >
+          R$ {totalValue.toFixed(2)}
+        </text>
+        <text 
+          x={cx} 
+          y={cy} 
+          dy={26} 
+          textAnchor="middle" 
+          fill="currentColor" 
+          className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider"
+        >
+          {`${value} ${value === 1 ? 'Serviço' : 'Serviços'}`}
+        </text>
+        <text 
+          x={cx} 
+          y={cy} 
+          dy={42} 
+          textAnchor="middle" 
+          fill="#22c55e" 
+          className="text-[10px] font-bold uppercase tracking-widest"
+        >
+          {`Sua Comissão (40%): R$ ${(totalValue * 0.40).toFixed(2)}`}
+        </text>
+
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius + 6}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+        />
+        <Sector
+          cx={cx}
+          cy={cy}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          innerRadius={outerRadius + 10}
+          outerRadius={outerRadius + 13}
+          fill={fill}
+          opacity={0.6}
+        />
+      </g>
+    );
+  };
   
   // Calculate general daily stats
   const stats = useMemo(() => {
@@ -103,49 +176,72 @@ export function FinancialDashboard({ agendamentos, currentUser }: FinancialDashb
         </div>
       </div>
 
-      <div className="w-full h-72 mt-4">
+      <div className="w-full h-80 mt-6">
         {currentUser.role === 'dono' ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <XAxis dataKey="name" stroke="#a1a1aa" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="#a1a1aa" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
-              <Tooltip 
-                cursor={{ fill: 'rgba(197, 160, 89, 0.1)' }}
-                contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff', borderRadius: '12px' }}
-                itemStyle={{ color: '#C5A059' }}
-                formatter={(value: any, name: any) => {
-                  if (name === 'lucroLoja') return [`R$ ${Number(value || 0).toFixed(2)}`, 'Lucro da Loja (60%)'];
-                  if (name === 'comissao') return [`R$ ${Number(value || 0).toFixed(2)}`, 'Comissão do Barbeiro (40%)'];
-                  return [`R$ ${Number(value || 0).toFixed(2)}`, name];
-                }}
-              />
-              <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-              <Bar dataKey="lucroLoja" stackId="a" fill="#3f3f46" name="lucroLoja" maxBarSize={60} />
-              <Bar dataKey="comissao" stackId="a" fill="#C5A059" name="comissao" radius={[6, 6, 0, 0]} maxBarSize={60} />
-            </BarChart>
-          </ResponsiveContainer>
+          barChartData.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-zinc-205 dark:border-zinc-800 rounded-3xl animate-pulse">
+              <TrendingUp className="w-12 h-12 text-zinc-400 dark:text-zinc-655 mb-3" />
+              <h4 className="text-zinc-900 dark:text-zinc-101 font-bold uppercase tracking-wide text-sm">Sem faturamento hoje</h4>
+              <p className="text-zinc-500 dark:text-zinc-405 text-xs mt-1">Os agendamentos concluídos ou pendentes aparecerão aqui assim que forem criados.</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barChartData} margin={{ top: 15, right: 10, left: -15, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="lojaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#71717a" stopOpacity={0.95}/>
+                    <stop offset="100%" stopColor="#27272a" stopOpacity={0.8}/>
+                  </linearGradient>
+                  <linearGradient id="comissaoGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#E5C079" stopOpacity={0.95}/>
+                    <stop offset="100%" stopColor="#C5A059" stopOpacity={0.85}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-zinc-100 dark:stroke-zinc-800" opacity={0.3} />
+                <XAxis dataKey="name" stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(197, 160, 89, 0.08)' }}
+                  contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff', borderRadius: '16px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)' }}
+                  itemStyle={{ color: '#C5A059' }}
+                  formatter={(value: any, name: any) => {
+                    if (name === 'lucroLoja') return [`R$ ${Number(value || 0).toFixed(2)}`, 'Lucro da Loja (60%)'];
+                    if (name === 'comissao') return [`R$ ${Number(value || 0).toFixed(2)}`, 'Comissão do Barbeiro (40%)'];
+                    return [`R$ ${Number(value || 0).toFixed(2)}`, name];
+                  }}
+                />
+                <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                <Bar dataKey="lucroLoja" stackId="a" fill="url(#lojaGrad)" name="lucroLoja" maxBarSize={45} radius={[0, 0, 8, 8]} />
+                <Bar dataKey="comissao" stackId="a" fill="url(#comissaoGrad)" name="comissao" maxBarSize={45} radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )
+        ) : pieChartData.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl animate-pulse">
+            <DollarSign className="w-12 h-12 text-zinc-400 dark:text-zinc-600 mb-3" />
+            <h4 className="text-zinc-900 dark:text-zinc-100 font-bold uppercase tracking-wide text-sm">Sem faturamento hoje</h4>
+            <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-1">Os agendamentos concluídos ou pendentes aparecerão aqui assim que forem criados.</p>
+          </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie
+              <GenericPie
+                activeIndex={activeIndex}
+                activeShape={renderActiveShape}
                 data={pieChartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={5}
+                innerRadius={65}
+                outerRadius={85}
+                paddingAngle={4}
                 dataKey="value"
+                onMouseEnter={(_: any, index: number) => setActiveIndex(index)}
               >
                 {pieChartData.map((_entry, index) => (
-                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke="transparent" />
                 ))}
-              </Pie>
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff', borderRadius: '12px' }}
-                itemStyle={{ color: '#C5A059' }}
-                formatter={(value: any) => [`${value || 0} serviços`, 'Quantidade']}
-              />
-              <Legend verticalAlign="bottom" height={36} iconType="circle" />
+              </GenericPie>
+              <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
             </PieChart>
           </ResponsiveContainer>
         )}

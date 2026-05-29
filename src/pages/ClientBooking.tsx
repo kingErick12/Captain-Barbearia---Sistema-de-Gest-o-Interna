@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, setHours, setMinutes, parseISO, isSameDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Scissors, CheckCircle, ChevronLeft, LogOut, User, Sparkles, Clock, Calendar, CalendarRange, MessageSquare, Star } from 'lucide-react';
+import { Scissors, CheckCircle, ChevronLeft, LogOut, User, Sparkles, Clock, Calendar, CalendarRange, MessageSquare, Star, AlertTriangle, X } from 'lucide-react';
 import { supabase, isSupabaseConfigured, MOCK_PROFILES, logEvent } from '../lib/supabase';
 import type { Agendamento, Profile } from '../lib/supabase';
 import { cn } from '../lib/utils';
@@ -49,6 +49,11 @@ export function ClientBooking() {
   const [activeView, setActiveView] = useState<'booking' | 'my_bookings'>('booking');
   const [myBookings, setMyBookings] = useState<Agendamento[]>([]);
   const [loadingMyBookings, setLoadingMyBookings] = useState(false);
+  
+  // Modal de Cancelamento
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [bookingToCancel, setBookingToCancel] = useState<Agendamento | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   // Fluxo de seleção
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // 1: Barbeiro, 2: Serviço, 3: Data/Hora, 4: Sucesso
@@ -81,15 +86,19 @@ export function ClientBooking() {
     setLoadingMyBookings(false);
   }, [currentUserId]);
 
-  const handleCancelBooking = async (booking: Agendamento) => {
+  const handleCancelBooking = (booking: Agendamento) => {
+    setBookingToCancel(booking);
+    setCancelReason('');
+    setIsCancelModalOpen(true);
+  };
+
+  const confirmCancellation = async () => {
+    if (!bookingToCancel) return;
+    const booking = bookingToCancel;
     const dataFormatada = format(parseISO(booking.data_hora), "dd/MM 'às' HH:mm");
-    const motivo = prompt(`Tem certeza de que deseja cancelar seu agendamento de ${booking.servico} para o dia ${dataFormatada}?\n\nPor favor, informe o motivo do cancelamento:`);
+    const motivoFinal = cancelReason.trim() || 'Não informado';
     
-    if (motivo === null) {
-      return; // Usuário cancelou o prompt
-    }
-    
-    const motivoFinal = motivo.trim() || 'Não informado';
+    setIsCancelModalOpen(false);
     setLoadingMyBookings(true);
     
     if (isSupabaseConfigured) {
@@ -161,6 +170,7 @@ export function ClientBooking() {
       }
     }
     setLoadingMyBookings(false);
+    setBookingToCancel(null);
   };
 
   useEffect(() => {
@@ -721,6 +731,64 @@ export function ClientBooking() {
           </div>
         )}
       </main>
+
+      {/* Modal de Confirmação de Cancelamento */}
+      {isCancelModalOpen && bookingToCancel && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-opacity">
+          <div className="w-full sm:max-w-md bg-white dark:bg-graphite-light sm:rounded-2xl rounded-t-3xl border sm:border-zinc-200 sm:dark:border-zinc-700 border-none shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 duration-300">
+            
+            <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+                <h2 className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-wider">Cancelar Horário</h2>
+              </div>
+              <button 
+                onClick={() => { setIsCancelModalOpen(false); setBookingToCancel(null); }}
+                className="p-2 bg-zinc-100 dark:bg-graphite-main rounded-full text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Tem certeza de que deseja cancelar seu agendamento de <strong className="text-zinc-900 dark:text-white">{bookingToCancel.servico}</strong> para o dia <strong className="text-zinc-900 dark:text-white">{format(parseISO(bookingToCancel.data_hora), "dd/MM 'às' HH:mm")}</strong>?
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-black ml-1">
+                  Motivo do cancelamento
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Ex: Não vou conseguir ir, imprevisto..."
+                  rows={3}
+                  className="w-full bg-zinc-50 dark:bg-graphite-main text-zinc-900 dark:text-white px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 focus:border-bronze-main focus:ring-1 focus:ring-bronze-main outline-none transition-all placeholder:text-zinc-400 dark:placeholder:text-zinc-600 font-medium text-sm resize-none"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { setIsCancelModalOpen(false); setBookingToCancel(null); }}
+                  className="flex-1 py-3.5 rounded-xl font-bold uppercase tracking-wider text-xs border border-zinc-250 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmCancellation}
+                  className="flex-1 py-3.5 rounded-xl font-bold uppercase tracking-wider text-xs bg-red-650 hover:bg-red-750 text-white shadow-[0_0_20px_rgba(239,68,68,0.2)] transition-all duration-300 cursor-pointer"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

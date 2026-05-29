@@ -33,7 +33,7 @@ export function Home() {
             onClick={() => navigate('/login')} 
             className="w-full sm:w-auto px-8 py-4 bg-bronze-main text-graphite-dark font-black uppercase tracking-widest text-sm rounded-2xl shadow-[0_0_20px_rgba(197,160,89,0.4)] hover:bg-bronze-light hover:scale-105 transition-all duration-300"
           >
-            Agendar Horário
+            Gerenciar Agendamentos
           </button>
         </div>
       </section>

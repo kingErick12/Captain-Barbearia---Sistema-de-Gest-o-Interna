@@ -38,7 +38,7 @@ export function ClientBooking() {
   });
   const [barbeiros, setBarbeiros] = useState<Profile[]>(() => {
     if (!isSupabaseConfigured) {
-      return MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono');
+      return MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono' || p.role === 'adm');
     }
     return [];
   });
@@ -113,7 +113,11 @@ export function ClientBooking() {
         setAgendamentos(prev => prev.map(a => a.id === booking.id ? { ...a, status: 'Cancelado', motivo_cancelamento: motivoFinal } : a));
         
         // Notificar via WhatsApp
-        const barbeiro = barbeiros.find(b => b.id === booking.barbeiro_id);
+        let barbeiro = barbeiros.find(b => b.id === booking.barbeiro_id);
+        if (!barbeiro) {
+          const { data } = await supabase.from('profiles').select('*').eq('id', booking.barbeiro_id).single();
+          if (data) barbeiro = data as Profile;
+        }
         if (barbeiro && barbeiro.telefone) {
           let numeroLimpo = barbeiro.telefone.replace(/\D/g, '');
           if (numeroLimpo.length === 11 || numeroLimpo.length === 10) {
@@ -121,6 +125,8 @@ export function ClientBooking() {
           }
           const msg = `Olá ${barbeiro.nome}! Eu (*${currentUser?.nome || 'Cliente'}*) precisei *CANCELAR* o agendamento de *${booking.servico}* para o dia *${dataFormatada}*.\n\n*Motivo:* ${motivoFinal} ⚓🙏`;
           window.open(`https://wa.me/${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+        } else {
+          alert("Agendamento cancelado com sucesso! Contudo, o profissional não possui WhatsApp cadastrado.");
         }
       }
     } else {
@@ -139,7 +145,10 @@ export function ClientBooking() {
       setAgendamentos(prev => prev.map(a => a.id === booking.id ? { ...a, status: 'Cancelado', motivo_cancelamento: motivoFinal } : a));
       
       // Notificar via WhatsApp (Mock)
-      const barbeiro = barbeiros.find(b => b.id === booking.barbeiro_id);
+      let barbeiro = barbeiros.find(b => b.id === booking.barbeiro_id);
+      if (!barbeiro) {
+        barbeiro = MOCK_PROFILES.find(p => p.id === booking.barbeiro_id);
+      }
       if (barbeiro && barbeiro.telefone) {
         let numeroLimpo = barbeiro.telefone.replace(/\D/g, '');
         if (numeroLimpo.length === 11 || numeroLimpo.length === 10) {
@@ -147,6 +156,8 @@ export function ClientBooking() {
         }
         const msg = `Olá ${barbeiro.nome}! Eu (*${currentUser?.nome || 'Cliente'}*) precisei *CANCELAR* o agendamento de *${booking.servico}* para o dia *${dataFormatada}*.\n\n*Motivo:* ${motivoFinal} (Mock) ⚓🙏`;
         window.open(`https://wa.me/${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+      } else {
+        alert("Agendamento cancelado com sucesso (Simulado)! Contudo, o profissional não possui WhatsApp cadastrado.");
       }
     }
     setLoadingMyBookings(false);
@@ -193,8 +204,8 @@ export function ClientBooking() {
           }
         }
 
-        // Pega a equipe (dono e barbeiros) para exibir na seleção
-        const { data: equipeData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
+        // Pega a equipe (dono, barbeiros e adm) para exibir na seleção
+        const { data: equipeData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono', 'adm']);
         if (equipeData) setBarbeiros(equipeData as Profile[]);
       } catch (err) {
         console.error("Erro ao carregar dados do agendamento:", err);

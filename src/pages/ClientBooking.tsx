@@ -38,7 +38,7 @@ export function ClientBooking() {
   });
   const [barbeiros, setBarbeiros] = useState<Profile[]>(() => {
     if (!isSupabaseConfigured) {
-      return MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono' || p.role === 'adm');
+      return MOCK_PROFILES.filter(p => p.role === 'barbeiro' || p.role === 'dono');
     }
     return [];
   });
@@ -204,8 +204,8 @@ export function ClientBooking() {
           }
         }
 
-        // Pega a equipe (dono, barbeiros e adm) para exibir na seleção
-        const { data: equipeData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono', 'adm']);
+        // Pega a equipe (dono e barbeiros) para exibir na seleção
+        const { data: equipeData } = await supabase.from('profiles').select('*').in('role', ['barbeiro', 'dono']);
         if (equipeData) setBarbeiros(equipeData as Profile[]);
       } catch (err) {
         console.error("Erro ao carregar dados do agendamento:", err);
